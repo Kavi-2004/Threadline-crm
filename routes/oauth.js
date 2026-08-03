@@ -13,7 +13,6 @@ const SCOPES = [
   'public_profile',
   'email',
   'pages_show_list',
-  'pages_read_engagement',
   'pages_manage_metadata',
   'pages_messaging'
 ].join(',');
