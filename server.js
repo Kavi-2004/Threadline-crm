@@ -1,5 +1,6 @@
 // server.js — Threadline CRM Entry Point
 require('dotenv').config();
+const whatsappQr = require('./lib/whatsapp-qr');
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -85,6 +86,19 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/auth/login' && req.method === 'POST') {
       const r = await auth.login(await readBody(req));
       return send(res, r.status, r.json);
+    }
+
+    // ---- WhatsApp QR Routes ----
+    if (p === '/api/whatsapp-qr/status' && req.method === 'GET') {
+      return send(res, 200, whatsappQr.getStatus());
+    }
+    if (p === '/api/whatsapp-qr/start' && req.method === 'POST') {
+      await whatsappQr.startWhatsAppQR();
+      return send(res, 200, { status: 'started' });
+    }
+    if (p === '/api/whatsapp-qr/disconnect' && req.method === 'POST') {
+      const r = await whatsappQr.disconnectWhatsApp();
+      return send(res, 200, r);
     }
 
     // ---- Meta Webhooks (WhatsApp, Facebook, Instagram) ----
