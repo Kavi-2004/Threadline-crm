@@ -1,0 +1,881 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Threadline CRM</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --bg:#0F1419; --panel:#171D26; --panel-alt:#1E2530; --panel-hover:#232B37;
+    --border:#262E3A; --text:#EDF1F5; --text-muted:#8A94A6; --text-dim:#5D6779;
+    --teal:#2DD4BF; --teal-dim:rgba(45,212,191,0.14);
+    --amber:#F2A93B; --amber-dim:rgba(242,169,59,0.14);
+    --danger:#E5595E; --danger-dim:rgba(229,89,94,0.14);
+    --whatsapp:#25D366; --facebook:#1877F2; --instagram:#DD2A7B;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-size:14px;}
+  .mono{font-family:'IBM Plex Mono',monospace;}
+  h1,h2,h3{font-family:'Space Grotesk',sans-serif;}
+  input,select,textarea{font-family:inherit;}
+  button{font-family:inherit;cursor:pointer;}
+  ::-webkit-scrollbar{width:8px;}
+  ::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px;}
+
+  /* ---- Auth screen ---- */
+  #authScreen{min-height:100vh;display:flex;align-items:center;justify-content:center;}
+  .auth-box{width:340px;background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:28px;}
+  .auth-box h1{font-size:19px;margin:0 0 4px;}
+  .auth-box .sub{color:var(--text-muted);font-size:12.5px;margin-bottom:20px;}
+  .auth-box input{width:100%;background:var(--panel-alt);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);margin-bottom:10px;font-size:13.5px;}
+  .auth-box input:focus{outline:none;border-color:var(--teal);}
+  .btn{background:var(--teal);color:#08251F;border:none;padding:10px 14px;border-radius:8px;font-weight:600;font-size:13.5px;width:100%;}
+  .btn:hover{background:#3EE0CC;}
+  .btn-ghost{background:var(--panel-alt);color:var(--text);border:1px solid var(--border);padding:8px 12px;border-radius:8px;font-size:12.5px;}
+  .switch-link{color:var(--teal);cursor:pointer;font-size:12.5px;text-align:center;margin-top:14px;}
+  .error-msg{color:var(--danger);font-size:12.5px;margin-bottom:8px;min-height:16px;}
+
+  /* ---- App shell (reused from prototype) ---- */
+  .app{display:none;grid-template-columns:220px 1fr;height:100vh;}
+  .app.active{display:grid;}
+  .sidebar{background:var(--panel);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:20px 14px;}
+  .brand{display:flex;align-items:center;gap:9px;padding:4px 8px 22px;}
+  .brand-mark{width:26px;height:26px;border-radius:7px;background:linear-gradient(135deg,var(--teal),#1B9E8E);}
+  .brand-name{font-weight:700;font-size:15.5px;}
+  .nav-item{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;color:var(--text-muted);font-weight:500;font-size:13.5px;margin-bottom:2px;border:none;background:none;width:100%;text-align:left;}
+  .nav-item:hover{background:var(--panel-alt);color:var(--text);}
+  .nav-item.active{background:var(--teal-dim);color:var(--teal);}
+  .biz-name{margin-top:auto;padding-top:14px;border-top:1px solid var(--border);font-size:12px;color:var(--text-muted);}
+  .biz-name b{color:var(--text);display:block;font-size:13px;}
+  .logout-link{color:var(--danger);font-size:11.5px;cursor:pointer;margin-top:6px;display:inline-block;}
+
+  .main{display:flex;flex-direction:column;overflow:hidden;}
+  .view{flex:1;overflow:hidden;display:none;}
+  .view.active{display:flex;}
+
+  .inbox-list{width:360px;border-right:1px solid var(--border);overflow-y:auto;flex-shrink:0;}
+  .lead-row{display:flex;gap:11px;padding:13px 18px;border-bottom:1px solid var(--border);cursor:pointer;}
+  .lead-row:hover, .lead-row.selected{background:var(--panel-alt);}
+  .avatar{width:36px;height:36px;border-radius:9px;background:var(--panel-alt);display:flex;align-items:center;justify-content:center;font-weight:600;font-size:13px;flex-shrink:0;position:relative;}
+  .chan-badge{position:absolute;bottom:-3px;right:-3px;width:15px;height:15px;border-radius:50%;border:2px solid var(--panel);display:flex;align-items:center;justify-content:center;font-size:8px;color:#fff;font-weight:700;}
+  .lead-row-body{flex:1;min-width:0;}
+  .lead-row-top{display:flex;justify-content:space-between;gap:8px;}
+  .lead-name{font-weight:600;font-size:13.5px;}
+  .lead-time{font-size:10.5px;color:var(--text-dim);flex-shrink:0;}
+  .lead-snippet{color:var(--text-muted);font-size:12.5px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .pill{font-size:10px;font-weight:600;padding:2px 7px;border-radius:20px;margin-top:6px;display:inline-block;}
+  .pill.new{background:var(--teal-dim);color:var(--teal);}
+
+  .detail{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+  .detail-empty{margin:auto;color:var(--text-dim);font-size:13px;}
+  .detail-head{padding:18px 24px;border-bottom:1px solid var(--border);display:flex;gap:14px;align-items:flex-start;}
+  .detail-actions{margin-left:auto;display:flex;gap:8px;}
+  .detail-body{flex:1;overflow-y:auto;padding:20px 24px;display:grid;grid-template-columns:1fr 260px;gap:24px;}
+  .field-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:14px;}
+  .field-card h3{font-size:11.5px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);margin:0 0 12px;font-family:'Inter';font-weight:600;}
+  .field-row{display:flex;justify-content:space-between;padding:6px 0;font-size:13px;border-bottom:1px solid var(--border);}
+  .field-row:last-child{border-bottom:none;}
+  .field-row .k{color:var(--text-muted);}
+  select.status-select{background:var(--panel-alt);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:12.5px;}
+  .timeline{position:relative;padding-left:6px;}
+  .tl-item{display:flex;gap:12px;padding-bottom:18px;position:relative;}
+  .tl-item:not(:last-child)::before{content:"";position:absolute;left:5px;top:16px;bottom:0;width:1px;background:var(--border);}
+  .tl-dot{width:11px;height:11px;border-radius:50%;margin-top:3px;flex-shrink:0;border:2px solid var(--bg);}
+  .tl-top{display:flex;justify-content:space-between;gap:8px;}
+  .tl-label{font-weight:600;font-size:13px;}
+  .tl-time{font-size:10.5px;color:var(--text-dim);flex-shrink:0;}
+  .tl-detail{color:var(--text-muted);font-size:12.5px;margin-top:2px;}
+  .quick-actions{display:flex;flex-direction:column;gap:8px;}
+  .quick-actions button{width:100%;text-align:left;padding:9px 12px;}
+
+  .followups{flex:1;overflow-y:auto;padding:22px 26px;}
+  .fu-group{margin-bottom:26px;}
+  .fu-group h3{font-size:12px;text-transform:uppercase;color:var(--text-muted);margin:0 0 10px;}
+  .fu-row{display:flex;align-items:center;gap:14px;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 16px;margin-bottom:8px;}
+  .fu-row .avatar{width:34px;height:34px;border-radius:8px;font-size:12px;}
+  .fu-main{flex:1;min-width:0;}
+  .fu-main .name{font-weight:600;font-size:13.5px;}
+  .fu-main .action{color:var(--text-muted);font-size:12px;}
+  .fu-due{font-family:'IBM Plex Mono';font-size:11.5px;padding:3px 9px;border-radius:6px;flex-shrink:0;}
+  .fu-actions{display:flex;gap:6px;}
+  .fu-actions button{padding:6px 10px;font-size:11.5px;}
+
+  .settings-view{flex:1;overflow-y:auto;padding:22px 26px;max-width:760px;}
+  .dash-stat-card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px 22px;margin-bottom:22px;display:flex;gap:32px;flex-wrap:wrap;}
+  .dash-stat-label{font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;}
+  .dash-stat-value{font-size:30px;font-weight:700;font-family:'Space Grotesk';margin-top:4px;}
+  .add-lead-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px;}
+  .leads-view{flex:1;overflow-y:auto;padding:22px 26px;}
+  .lead-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:13px 16px;margin-bottom:8px;display:flex;align-items:center;gap:14px;}
+  .lead-card .avatar{width:36px;height:36px;border-radius:9px;flex-shrink:0;}
+  .lead-card-main{flex:1;min-width:0;}
+  .lead-card-main .name{font-weight:600;font-size:13.5px;}
+  .lead-card-main .meta{color:var(--text-muted);font-size:12px;margin-top:2px;}
+  .status-pill{font-size:10px;font-weight:600;padding:3px 8px;border-radius:20px;flex-shrink:0;}
+  .status-pill.status-new{background:var(--teal-dim);color:var(--teal);}
+  .status-pill.status-busy{background:var(--amber-dim);color:var(--amber);}
+  .status-pill.status-interested{background:rgba(45,212,191,0.14);color:var(--teal);}
+  .status-pill.status-qualified{background:rgba(139,143,247,0.16);color:#8B8FF7;}
+  .status-pill.status-not-interested{background:var(--danger-dim);color:var(--danger);}
+  .status-pill.status-won{background:rgba(45,212,191,0.22);color:var(--teal);}
+  .status-pill.status-lost{background:var(--panel-alt);color:var(--text-dim);}
+  .qbtn{border:1px solid var(--border);background:var(--panel-alt);color:var(--text-muted);font-size:11px;font-weight:600;padding:6px 9px;border-radius:7px;flex-shrink:0;white-space:nowrap;}
+  .qbtn:hover{background:var(--panel-hover);color:var(--text);}
+  .qbtn.on-busy.active{background:var(--amber-dim);color:var(--amber);border-color:var(--amber);}
+  .qbtn.on-interested.active{background:var(--teal-dim);color:var(--teal);border-color:var(--teal);}
+  .qbtn.on-qualified.active{background:rgba(139,143,247,0.16);color:#8B8FF7;border-color:#8B8FF7;}
+  .qbtn.on-not-interested.active{background:var(--danger-dim);color:var(--danger);border-color:var(--danger);}
+  .qbtn.contacted-btn{background:var(--teal);color:#08251F;border-color:var(--teal);}
+  .qbtn.contacted-btn:hover{background:#3EE0CC;}
+  .followup-progress{font-family:'IBM Plex Mono';font-size:11px;color:var(--text-muted);flex-shrink:0;}
+  .integration-card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px 20px;margin-bottom:14px;display:flex;align-items:center;gap:16px;}
+  .chan-icon{width:42px;height:42px;border-radius:11px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:15px;flex-shrink:0;}
+  .integration-info{flex:1;}
+  .integration-info h4{margin:0 0 3px;font-size:14.5px;}
+  .integration-info p{margin:0;color:var(--text-muted);font-size:12px;}
+  .integration-info input{margin-top:8px;width:220px;background:var(--panel-alt);border:1px solid var(--border);border-radius:6px;padding:6px 9px;color:var(--text);font-size:12px;}
+  .template-box{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px 20px;margin-top:20px;}
+  textarea{width:100%;background:var(--panel-alt);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-size:13px;min-height:70px;}
+  .empty-hint{color:var(--text-dim);font-size:12.5px;padding:16px;}
+
+  /* ==========================================================
+     Responsive — tablet & phone (≤860px)
+     ========================================================== */
+  @media (max-width: 860px){
+    .auth-box{width:90vw;max-width:340px;}
+
+    /* App shell: sidebar becomes a fixed bottom nav bar instead of a
+       left column. column-reverse flips it below the main content
+       without needing to reorder any markup. */
+    .app.active{display:flex;flex-direction:column-reverse;height:100dvh;}
+    .sidebar{flex-direction:row;align-items:center;padding:6px 4px;border-right:none;border-top:1px solid var(--border);overflow-x:auto;flex-shrink:0;}
+    .brand,.biz-name{display:none;}
+    .nav-item{flex-direction:column;gap:2px;flex:1;min-width:64px;text-align:center;justify-content:center;font-size:11px;padding:8px 4px;min-height:44px;}
+
+    .main{flex:1;min-height:0;}
+
+    /* Inbox: list + detail stack instead of sitting side by side */
+    #view-inbox{flex-direction:column;}
+    .inbox-list{width:100%;max-height:38vh;border-right:none;border-bottom:1px solid var(--border);}
+    .detail{min-height:0;}
+    .detail-body{grid-template-columns:1fr;}
+    .detail-head{flex-wrap:wrap;}
+    .detail-actions{margin-left:0;width:100%;}
+
+    /* Lead cards & follow-up rows: wrap instead of overflowing */
+    .lead-card,.fu-row{flex-wrap:wrap;}
+    .lead-card .lead-card-main,.fu-row .fu-main{min-width:150px;}
+    .lead-card > div:last-child{width:100%;justify-content:flex-start;margin-top:4px;}
+
+    .dash-stat-card{gap:20px;padding:16px;}
+    .dash-stat-value{font-size:24px;}
+
+    .add-lead-grid{grid-template-columns:1fr;}
+
+    .integration-card{flex-wrap:wrap;}
+    .integration-info input{width:100%;}
+
+    .settings-view,.leads-view,.followups{padding:16px;}
+
+    /* Bigger touch targets throughout */
+    .btn,.btn-ghost,.qbtn{padding:10px 14px;}
+  }
+</style>
+</head>
+
+<body>
+
+<!-- AUTH SCREEN -->
+<div id="authScreen">
+  <div class="auth-box">
+    <h1 id="authTitle">Create your account</h1>
+    <div class="sub" id="authSub">Set up Threadline for your business</div>
+    <div class="error-msg" id="authError"></div>
+    <input id="businessNameInput" placeholder="Business name">
+    <input id="emailInput" placeholder="Email" type="email">
+    <input id="passwordInput" placeholder="Password" type="password">
+    <button class="btn" id="authSubmitBtn" onclick="submitAuth()">Create account</button>
+    <div class="switch-link" id="switchLink" onclick="toggleAuthMode()">Already have an account? Log in</div>
+  </div>
+</div>
+
+<!-- APP -->
+<div class="app" id="app">
+  <div class="sidebar">
+    <div class="brand"><div class="brand-mark"></div><div class="brand-name">Threadline</div></div>
+    <button class="nav-item active" data-view="dashboard">Dashboard</button>
+    <button class="nav-item" data-view="leads">Leads</button>
+    <button class="nav-item" data-view="inbox">Inbox</button>
+    <button class="nav-item" data-view="followups">Follow-ups</button>
+    <button class="nav-item" data-view="settings">Settings</button>
+    <div class="biz-name"><b id="bizNameLabel"></b><span id="bizEmailLabel"></span>
+      <div class="logout-link" onclick="logout()">Log out</div>
+    </div>
+  </div>
+  <div class="main">
+    <div class="view active" id="view-dashboard">
+      <div class="followups">
+        <h1 style="margin:0 0 4px;">Dashboard</h1>
+        <div style="color:var(--text-muted);margin-bottom:20px;">Today's new leads, and everyone who's due a follow-up.</div>
+        <div id="dashStatCard" class="dash-stat-card">
+          <div><div class="dash-stat-label">New leads today</div><div id="dashNewToday" class="dash-stat-value">—</div></div>
+          <div><div class="dash-stat-label">Active conversations</div><div id="dashActiveConvo" class="dash-stat-value">—</div></div>
+          <div><div class="dash-stat-label">Avg. response time</div><div id="dashResponseTime" class="dash-stat-value">—</div></div>
+          <div><div class="dash-stat-label">Follow-up period</div><div id="dashPeriod" class="dash-stat-value">—</div></div>
+          <div><div class="dash-stat-label">Due for follow-up</div><div id="dashDueCount" class="dash-stat-value" style="color:var(--amber);">—</div></div>
+        </div>
+        <h3 style="font-size:12px;text-transform:uppercase;color:var(--text-muted);margin:0 0 10px;">Leads that need follow-up</h3>
+        <div id="dashDueList"></div>
+      </div>
+    </div>
+    <div class="view" id="view-leads">
+      <div class="leads-view">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:4px;">
+          <h1 style="margin:0;">Leads</h1>
+          <div style="margin-left:auto;display:flex;gap:8px;">
+            <button class="btn-ghost" onclick="toggleAddLeadForm()">+ Add lead</button>
+            <button class="btn-ghost" onclick="document.getElementById('excelFileInput').click()">Import from Excel</button>
+            <input type="file" id="excelFileInput" accept=".xlsx,.xls,.csv" style="display:none;" onchange="handleExcelImport(event)">
+          </div>
+        </div>
+        <div style="color:var(--text-muted);margin-bottom:16px;">Duplicate phone numbers are automatically skipped, whether added manually or imported.</div>
+
+        <div id="addLeadForm" style="display:none;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px 18px;margin-bottom:18px;">
+          <div class="add-lead-grid">
+            <input id="newLeadName" placeholder="Customer name *" style="background:var(--panel-alt);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-size:13px;">
+            <input id="newLeadPhone" placeholder="Phone number *" style="background:var(--panel-alt);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-size:13px;">
+            <input id="newLeadEmail" placeholder="Email (optional)" style="background:var(--panel-alt);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-size:13px;">
+          </div>
+          <textarea id="newLeadNotes" placeholder="Notes (optional)" style="min-height:50px;margin-bottom:10px;"></textarea>
+          <div style="display:flex;gap:8px;">
+            <button class="btn" style="width:auto;" onclick="submitNewLead()">Save lead</button>
+            <button class="btn-ghost" onclick="toggleAddLeadForm()">Cancel</button>
+          </div>
+        </div>
+
+        <div id="importSummary"></div>
+        <div id="leadsListBody"></div>
+      </div>
+    </div>
+    <div class="view" id="view-inbox">
+      <div class="inbox-list" id="inboxList"></div>
+      <div class="detail" id="detailPanel"><div class="detail-empty">Select a lead to view their full history</div></div>
+    </div>
+    <div class="view" id="view-followups">
+      <div class="followups">
+        <h1 style="margin:0 0 4px;">Follow-up reminders</h1>
+        <div style="color:var(--text-muted);margin-bottom:20px;">Everyone who needs a touch, grouped by urgency.</div>
+        <div id="fuGroups"></div>
+      </div>
+    </div>
+    <div class="view" id="view-settings">
+      <div class="settings-view">
+        <h1 style="margin:0 0 4px;">Integrations</h1>
+        <div style="color:var(--text-muted);margin-bottom:20px;">Connect WhatsApp, Facebook, and Instagram. Two ways to connect WhatsApp are offered below — pick per your compliance needs.</div>
+
+        <div class="template-box" style="margin-top:0;">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;">
+            <div class="chan-icon" style="background:var(--whatsapp);width:34px;height:34px;font-size:13px;">W</div>
+            <h3 style="margin:0;font-size:13px;color:var(--text);">WhatsApp — QR connect (alternative)</h3>
+            <span style="margin-left:auto;background:var(--danger-dim);color:var(--danger);font-size:10.5px;font-weight:600;padding:3px 8px;border-radius:20px;">Unofficial · ToS risk</span>
+          </div>
+          <div style="color:var(--text-muted);font-size:12px;margin-bottom:12px;">Links a real WhatsApp account the same way WhatsApp Web does. Not Meta's official API — the connected number can be banned by WhatsApp at any time with no appeal. The official option below doesn't carry this risk.</div>
+          <div id="qrConnectArea"></div>
+        </div>
+
+        <div class="template-box">
+          <h3 style="margin:0 0 4px;font-size:13px;color:var(--text-muted);">Official channels</h3>
+          <div style="color:var(--text-muted);font-size:12px;margin-bottom:12px;">WhatsApp Business Platform, Facebook Lead Ads, Instagram — connect via Meta's supported APIs.</div>
+        </div>
+        <div id="integrationCards"></div>
+
+        <div class="template-box">
+          <h3 style="margin:0 0 10px;font-size:13px;color:var(--text-muted);">Follow-up period</h3>
+          <div style="color:var(--text-muted);font-size:12.5px;margin-bottom:12px;">How many days after the last contact should a lead show up as "needs follow-up" on the Dashboard?</div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <select id="followupPreset" onchange="onFollowupPresetChange()" style="background:var(--panel-alt);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:13px;">
+              <option value="3">3 days</option>
+              <option value="5">5 days</option>
+              <option value="custom">Custom</option>
+            </select>
+            <input id="followupCustomDays" type="number" min="1" style="display:none;width:90px;background:var(--panel-alt);border:1px solid var(--border);border-radius:8px;padding:7px 10px;color:var(--text);font-size:13px;" placeholder="days">
+            <button class="btn" style="width:auto;" onclick="saveFollowupPeriod()">Save</button>
+          </div>
+        </div>
+
+        <div class="template-box">
+          <h3 style="margin:0 0 10px;font-size:13px;color:var(--text-muted);">Staff</h3>
+          <div style="color:var(--text-muted);font-size:12.5px;margin-bottom:12px;">Add staff names so leads can be assigned to someone for follow-up.</div>
+          <div id="staffChips" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;"></div>
+          <div style="display:flex;gap:8px;">
+            <input id="newStaffName" placeholder="Staff name" style="flex:1;background:var(--panel-alt);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-size:13px;">
+            <button class="btn" style="width:auto;" onclick="addStaff()">Add</button>
+          </div>
+        </div>
+
+        <div class="template-box">
+          <h3 style="margin:0 0 10px;font-size:13px;color:var(--text-muted);">Automatic reply template</h3>
+          <textarea id="replyTemplate"></textarea>
+          <div style="display:flex;justify-content:flex-end;margin-top:10px;"><button class="btn" style="width:auto;" onclick="saveTemplate()">Save template</button></div>
+        </div>
+
+        <div class="template-box">
+          <h3 style="margin:0 0 4px;font-size:13px;color:var(--text-muted);">Account</h3>
+          <div style="color:var(--text-muted);font-size:12.5px;margin-bottom:12px;">Signed in as <b id="settingsBizEmail" style="color:var(--text);"></b></div>
+          <button class="btn-ghost" style="color:var(--danger);border-color:var(--danger-dim);" onclick="logout()">Log out</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = ''; // same origin
+let token = localStorage.getItem('threadline_token');
+let business = JSON.parse(localStorage.getItem('threadline_business') || 'null');
+let authMode = 'signup';
+let leadsCache = [];
+let selectedId = null;
+let settings = { replyTemplate:'', followupDays:3, staffList:[] };
+
+const CHANNELS = {
+  whatsapp:{label:'WhatsApp', color:'var(--whatsapp)', letter:'W'},
+  facebook:{label:'Facebook', color:'var(--facebook)', letter:'f'},
+  instagram:{label:'Instagram', color:'var(--instagram)', letter:'IG'},
+};
+
+function initials(name){ return (name||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase(); }
+function timeAgo(iso){
+  if(!iso) return '—';
+  const mins = Math.max(0, Math.round((Date.now() - new Date(iso).getTime())/60000));
+  if(mins < 60) return mins+'m ago';
+  if(mins < 1440) return Math.floor(mins/60)+'h ago';
+  return Math.floor(mins/1440)+'d ago';
+}
+function fmtDue(iso){
+  if(!iso) return {text:'not set', cls:''};
+  const mins = Math.round((new Date(iso).getTime() - Date.now())/60000);
+  if(mins < 0) return {text: Math.abs(Math.round(mins/60))+'h overdue', cls:'overdue'};
+  if(mins < 60) return {text:'in '+mins+'m', cls:'due'};
+  if(mins < 1440) return {text:'in '+Math.round(mins/60)+'h', cls:'due'};
+  return {text:'in '+Math.round(mins/1440)+'d', cls:''};
+}
+// avgResponseMinutes is null until at least one lead has been marked Contacted.
+function formatResponseTime(mins){
+  if(mins === null || mins === undefined) return '—';
+  if(mins < 60) return mins+'m';
+  if(mins < 1440) return Math.round(mins/60)+'h';
+  return Math.round(mins/1440)+'d';
+}
+
+async function api(path, opts={}){
+  const res = await fetch(API + path, {
+    ...opts,
+    headers: { 'Content-Type':'application/json', ...(token? {Authorization:'Bearer '+token}:{}), ...(opts.headers||{}) },
+    body: opts.body ? JSON.stringify(opts.body) : undefined,
+  });
+  const json = await res.json().catch(()=>({}));
+  if(res.status === 401){
+    // Token is either missing, expired, or points at a business that no
+    // longer exists (e.g. a fresh database during development). Rather than
+    // leaving the app half-loaded with silent failures, drop back to login.
+    localStorage.removeItem('threadline_token');
+    localStorage.removeItem('threadline_business');
+    alert('Your session has expired or is no longer valid. Please log in again.');
+    location.reload();
+    throw new Error('Session invalid — reloading');
+  }
+  if(!res.ok) throw new Error(json.error || 'Request failed');
+  return json;
+}
+
+// ---- Auth ----
+function toggleAuthMode(){
+  authMode = authMode === 'signup' ? 'login' : 'signup';
+  document.getElementById('authTitle').textContent = authMode==='signup' ? 'Create your account' : 'Welcome back';
+  document.getElementById('authSub').textContent = authMode==='signup' ? 'Set up Threadline for your business' : 'Log in to your dashboard';
+  document.getElementById('authSubmitBtn').textContent = authMode==='signup' ? 'Create account' : 'Log in';
+  document.getElementById('switchLink').textContent = authMode==='signup' ? 'Already have an account? Log in' : "Don't have an account? Sign up";
+  document.getElementById('businessNameInput').style.display = authMode==='signup' ? 'block' : 'none';
+  document.getElementById('authError').textContent = '';
+}
+
+async function submitAuth(){
+  const businessName = document.getElementById('businessNameInput').value.trim();
+  const email = document.getElementById('emailInput').value.trim();
+  const password = document.getElementById('passwordInput').value;
+  const errEl = document.getElementById('authError');
+  errEl.textContent = '';
+  try{
+    const path = authMode==='signup' ? '/api/auth/signup' : '/api/auth/login';
+    const body = authMode==='signup' ? {businessName, email, password} : {email, password};
+    const data = await api(path, {method:'POST', body});
+    token = data.token;
+    business = {id:data.businessId, name:data.businessName, email:data.email};
+    localStorage.setItem('threadline_token', token);
+    localStorage.setItem('threadline_business', JSON.stringify(business));
+    enterApp();
+  }catch(e){ errEl.textContent = e.message; }
+}
+
+function logout(){
+  localStorage.removeItem('threadline_token');
+  localStorage.removeItem('threadline_business');
+  location.reload();
+}
+
+async function enterApp(){
+  document.getElementById('authScreen').style.display = 'none';
+  document.getElementById('app').classList.add('active');
+  document.getElementById('bizNameLabel').textContent = business.name;
+  document.getElementById('bizEmailLabel').textContent = business.email;
+  document.getElementById('settingsBizEmail').textContent = business.email;
+  settings = await api('/api/me');
+  await refreshAll();
+  renderIntegrations();
+  renderSettingsPanels();
+  pollQrStatus();
+}
+
+// ---- Data refresh ----
+async function refreshAll(){
+  leadsCache = await api('/api/leads');
+  renderInboxList();
+  renderFollowups();
+  renderDashboard();
+  renderLeadsListView();
+}
+
+// ---- Dashboard ----
+async function renderDashboard(){
+  const d = await api('/api/dashboard');
+  document.getElementById('dashNewToday').textContent = d.newLeadsToday;
+  document.getElementById('dashActiveConvo').textContent = d.activeConversations;
+  document.getElementById('dashResponseTime').textContent = formatResponseTime(d.avgResponseMinutes);
+  document.getElementById('dashPeriod').textContent = d.followupDays + 'd';
+  document.getElementById('dashDueCount').textContent = d.dueForFollowup.length;
+  const listEl = document.getElementById('dashDueList');
+  if(d.dueForFollowup.length === 0){
+    listEl.innerHTML = '<div class="empty-hint">Nobody is due for a follow-up right now.</div>';
+    return;
+  }
+  listEl.innerHTML = d.dueForFollowup.map(l=>{
+    const ch = CHANNELS[l.channel] || {label:l.channel, color:'#888', letter:'?'};
+    const due = fmtDue(l.next_followup_at);
+    return `<div class="fu-row" onclick="goToLead('${l.id}')" style="cursor:pointer;">
+      <div class="avatar">${initials(l.name)}<div class="chan-badge" style="background:${ch.color}">${ch.letter}</div></div>
+      <div class="fu-main">
+        <div class="name">${l.name}</div>
+        <div class="action mono">${l.phone||'—'} · ${l.assigned_staff ? 'Assigned to '+l.assigned_staff : 'Unassigned'}</div>
+      </div>
+      <div class="fu-due" style="background:${due.cls==='overdue'?'var(--danger-dim)':'var(--amber-dim)'};color:${due.cls==='overdue'?'var(--danger)':'var(--amber)'}">${due.text}</div>
+      <div class="fu-actions"><button class="btn-ghost" onclick="event.stopPropagation();logCall('${l.id}')">Log call</button><button class="qbtn contacted-btn" onclick="event.stopPropagation();markContactedClick('${l.id}')">✓ Contacted</button></div>
+    </div>`;
+  }).join('');
+}
+function goToLead(id){
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.getElementById('view-inbox').classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active', n.dataset.view==='inbox'));
+  selectLead(id);
+}
+
+// ---- Settings: follow-up period + staff ----
+function renderSettingsPanels(){
+  const preset = document.getElementById('followupPreset');
+  const custom = document.getElementById('followupCustomDays');
+  if(settings.followupDays === 3 || settings.followupDays === 5){
+    preset.value = String(settings.followupDays);
+    custom.style.display = 'none';
+  } else {
+    preset.value = 'custom';
+    custom.style.display = 'inline-block';
+    custom.value = settings.followupDays;
+  }
+  renderStaffChips();
+}
+function onFollowupPresetChange(){
+  document.getElementById('followupCustomDays').style.display = document.getElementById('followupPreset').value==='custom' ? 'inline-block' : 'none';
+}
+async function saveFollowupPeriod(){
+  const preset = document.getElementById('followupPreset').value;
+  const days = preset === 'custom' ? parseInt(document.getElementById('followupCustomDays').value,10) : parseInt(preset,10);
+  if(!Number.isInteger(days) || days < 1){ alert('Enter a whole number of days, at least 1.'); return; }
+  settings = await api('/api/me', {method:'PATCH', body:{followupDays: days}});
+  await refreshAll();
+  alert(`Follow-up period set to ${days} day(s). The Dashboard now uses this to flag leads.`);
+}
+function renderStaffChips(){
+  const el = document.getElementById('staffChips');
+  if(settings.staffList.length===0){ el.innerHTML = '<span style="color:var(--text-dim);font-size:12.5px;">No staff added yet.</span>'; return; }
+  el.innerHTML = settings.staffList.map(name => `
+    <span style="background:var(--panel-alt);border:1px solid var(--border);border-radius:20px;padding:5px 12px;font-size:12.5px;display:inline-flex;align-items:center;gap:8px;">
+      ${name} <span style="cursor:pointer;color:var(--danger);" onclick="removeStaff('${name.replace(/'/g,"\\'")}')">✕</span>
+    </span>`).join('');
+}
+async function addStaff(){
+  const input = document.getElementById('newStaffName');
+  const name = input.value.trim();
+  if(!name) return;
+  if(settings.staffList.includes(name)){ input.value=''; return; }
+  const newList = [...settings.staffList, name];
+  settings = await api('/api/me', {method:'PATCH', body:{staffList:newList}});
+  input.value = '';
+  renderStaffChips();
+}
+async function removeStaff(name){
+  const newList = settings.staffList.filter(s=>s!==name);
+  settings = await api('/api/me', {method:'PATCH', body:{staffList:newList}});
+  renderStaffChips();
+}
+
+function renderInboxList(){
+  const el = document.getElementById('inboxList');
+  if(leadsCache.length===0){ el.innerHTML = '<div class="empty-hint">No leads yet. Connect a channel under Integrations, or send a test webhook — see README.</div>'; return; }
+  el.innerHTML = leadsCache.map(l=>{
+    const ch = CHANNELS[l.channel] || {label:l.channel, color:'#888', letter:'?'};
+    return `<div class="lead-row ${l.id===selectedId?'selected':''}" onclick="selectLead('${l.id}')">
+      <div class="avatar">${initials(l.name)}<div class="chan-badge" style="background:${ch.color}">${ch.letter}</div></div>
+      <div class="lead-row-body">
+        <div class="lead-row-top"><span class="lead-name">${l.name}</span><span class="lead-time">${timeAgo(l.captured_at)}</span></div>
+        <div class="lead-snippet">${l.last_message||''}</div>
+        <span class="pill new">${l.status}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function selectLead(id){
+  selectedId = id;
+  renderInboxList();
+  const lead = await api('/api/leads/'+id);
+  renderDetail(lead);
+}
+
+function tlDotColor(channel){
+  if(channel==='whatsapp') return 'var(--whatsapp)';
+  if(channel==='facebook') return 'var(--facebook)';
+  if(channel==='instagram') return 'var(--instagram)';
+  if(channel==='call') return 'var(--amber)';
+  return 'var(--text-dim)';
+}
+
+function renderDetail(l){
+  const panel = document.getElementById('detailPanel');
+  const ch = CHANNELS[l.channel] || {label:l.channel, color:'#888', letter:'?'};
+  const due = fmtDue(l.next_followup_at);
+  panel.innerHTML = `
+    <div class="detail-head">
+      <div class="avatar" style="width:46px;height:46px;border-radius:12px;font-size:16px;">${initials(l.name)}<div class="chan-badge" style="background:${ch.color}">${ch.letter}</div></div>
+      <div><h2 style="margin:0 0 3px;font-size:16.5px;">${l.name}</h2><div class="mono" style="color:var(--text-muted);font-size:12.5px;">${l.phone||'—'} · captured via ${ch.label}</div></div>
+      <div class="detail-actions">
+        <button class="btn-ghost" onclick="logCall('${l.id}')">Log a call</button>
+      </div>
+    </div>
+    <div class="detail-body">
+      <div class="field-card">
+        <h3>Activity &amp; follow-up history</h3>
+        <div class="timeline">
+          ${l.history.map(h=>`
+            <div class="tl-item">
+              <div class="tl-dot" style="background:${tlDotColor(h.channel)}"></div>
+              <div><div class="tl-top"><span class="tl-label">${h.label}</span><span class="tl-time mono">${timeAgo(h.created_at)}</span></div>
+              <div class="tl-detail">${h.detail||''}</div></div>
+            </div>`).join('')}
+        </div>
+      </div>
+      <div>
+        <div class="field-card">
+          <h3>Contact details</h3>
+          <div class="field-row"><span class="k">Phone</span><span class="mono">${l.phone||'—'}</span></div>
+          <div class="field-row"><span class="k">Source</span><span>${ch.label}</span></div>
+          <div class="field-row"><span class="k">Captured</span><span>${timeAgo(l.captured_at)}</span></div>
+          <div class="field-row"><span class="k">Status</span><span>
+            <select class="status-select" onchange="changeStatus('${l.id}', this.value)">
+              ${['New','Busy','Interested','Qualified','Not Interested','Won','Lost'].map(s=>`<option ${s===l.status?'selected':''}>${s}</option>`).join('')}
+            </select></span></div>
+          <div class="field-row"><span class="k">Assigned staff</span><span>
+            <select class="status-select" onchange="assignStaff('${l.id}', this.value)">
+              <option value="" ${!l.assigned_staff?'selected':''}>Unassigned</option>
+              ${settings.staffList.map(s=>`<option ${s===l.assigned_staff?'selected':''}>${s}</option>`).join('')}
+            </select></span></div>
+          <div class="field-row"><span class="k">Next follow-up</span><span style="color:${due.cls==='overdue'?'var(--danger)':due.cls==='due'?'var(--amber)':'var(--text)'}">${due.text}</span></div>
+        </div>
+        <div class="field-card">
+          <h3>Quick actions</h3>
+          <div class="quick-actions">
+            <button class="btn-ghost" onclick="setReminder('${l.id}')">Snooze follow-up 1 hour</button>
+            <button class="btn-ghost" onclick="bumpFollowupClick('${l.id}')">Reset to ${settings.followupDays}-day follow-up</button>
+            <button class="btn-ghost" onclick="logCall('${l.id}')">Log a call</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function logCall(id){
+  // The server restarts the follow-up clock automatically (using the
+  // configured follow-up period) whenever a call is logged.
+  await api(`/api/leads/${id}/history`, {method:'POST', body:{type:'call', channel:'call', label:'Outbound call logged', detail:'Call logged manually just now'}});
+  await refreshAll();
+  if(document.getElementById('view-inbox').classList.contains('active')) selectLead(id);
+}
+async function changeStatus(id, val){
+  await api(`/api/leads/${id}`, {method:'PATCH', body:{status:val}});
+  await refreshAll(); selectLead(id);
+}
+async function assignStaff(id, val){
+  await api(`/api/leads/${id}`, {method:'PATCH', body:{assignedStaff: val || null}});
+  await refreshAll(); selectLead(id);
+}
+async function bumpFollowupClick(id){
+  const next = new Date(Date.now() + settings.followupDays*24*3600*1000).toISOString();
+  await api(`/api/leads/${id}`, {method:'PATCH', body:{nextFollowupAt: next}});
+  await refreshAll(); selectLead(id);
+}
+async function setReminder(id){
+  await api(`/api/leads/${id}`, {method:'PATCH', body:{nextFollowupAt: new Date(Date.now()+3600*1000).toISOString()}});
+  await refreshAll(); selectLead(id);
+}
+
+async function renderFollowups(){
+  const groups = await api('/api/followups');
+  const defs = [{key:'overdue',label:'Overdue',color:'var(--danger)'},{key:'today',label:'Due today',color:'var(--amber)'},{key:'upcoming',label:'Upcoming',color:'var(--teal)'}];
+  document.getElementById('fuGroups').innerHTML = defs.map(g=>{
+    const items = groups[g.key]||[];
+    if(items.length===0) return '';
+    return `<div class="fu-group"><h3>${g.label} (${items.length})</h3>${items.map(l=>{
+      const ch = CHANNELS[l.channel]||{color:'#888',letter:'?'};
+      const due = fmtDue(l.next_followup_at);
+      return `<div class="fu-row">
+        <div class="avatar">${initials(l.name)}<div class="chan-badge" style="background:${ch.color}">${ch.letter}</div></div>
+        <div class="fu-main"><div class="name">${l.name}</div><div class="action">${l.status} · ${l.phone||''}</div></div>
+        <div class="fu-due" style="background:${due.cls==='overdue'?'var(--danger-dim)':'var(--amber-dim)'};color:${due.cls==='overdue'?'var(--danger)':'var(--amber)'}">${due.text}</div>
+        <div class="fu-actions"><button class="btn-ghost" onclick="logCall('${l.id}')">Call</button><button class="qbtn contacted-btn" onclick="markContactedClick('${l.id}')">✓ Contacted</button></div>
+      </div>`;
+    }).join('')}</div>`;
+  }).join('') || '<div class="empty-hint">No follow-ups scheduled yet.</div>';
+}
+
+// ---- WhatsApp QR connect (unofficial) ----
+let qrPollTimer = null;
+
+function renderQrArea(data){
+  const el = document.getElementById('qrConnectArea');
+  if(!el) return;
+  if(data.status === 'not_installed'){
+    el.innerHTML = `<div class="empty-hint">Not set up on this server yet. The server admin needs to run <code>npm install @whiskeysockets/baileys qrcode pino</code> and restart.</div>`;
+  } else if(data.status === 'not_connected' || data.status === 'disconnected'){
+    el.innerHTML = `<button class="btn-ghost" onclick="startQrConnect()">Connect via QR code</button>`;
+  } else if(data.status === 'connecting'){
+    el.innerHTML = `<div class="empty-hint">Starting connection…</div>`;
+  } else if(data.status === 'waiting_scan'){
+    el.innerHTML = `
+      <div style="display:flex;align-items:center;gap:16px;">
+        <img src="${data.qrDataUrl}" style="width:180px;height:180px;border-radius:8px;background:#fff;padding:8px;">
+        <div style="font-size:12.5px;color:var(--text-muted);max-width:260px;">Open WhatsApp on the phone you want to connect → Settings → Linked Devices → Link a Device, then scan this code.</div>
+      </div>`;
+  } else if(data.status === 'connected'){
+    el.innerHTML = `<div style="display:flex;align-items:center;gap:10px;">
+      <span class="status-connected"><span class="dot on" style="background:var(--whatsapp);color:var(--whatsapp);"></span>Connected</span>
+      <button class="btn-ghost" onclick="disconnectQr()">Disconnect</button>
+    </div>`;
+  }
+}
+
+async function pollQrStatus(){
+  try{
+    const data = await api('/api/whatsapp-qr/status');
+    renderQrArea(data);
+    if(data.status === 'waiting_scan' || data.status === 'connecting'){
+      qrPollTimer = setTimeout(pollQrStatus, 2000);
+    }
+  }catch(e){ /* ignore transient poll errors */ }
+}
+
+async function startQrConnect(){
+  clearTimeout(qrPollTimer);
+  document.getElementById('qrConnectArea').innerHTML = '<div class="empty-hint">Starting…</div>';
+  try{
+    const data = await api('/api/whatsapp-qr/start', {method:'POST'});
+    if(data.status === 'not_installed'){
+      renderQrArea(data);
+    } else {
+      pollQrStatus();
+    }
+  }catch(e){
+    document.getElementById('qrConnectArea').innerHTML = `<div class="empty-hint" style="color:var(--danger);">${e.message}</div>`;
+  }
+}
+
+async function disconnectQr(){
+  clearTimeout(qrPollTimer);
+  await api('/api/whatsapp-qr/disconnect', {method:'POST'});
+  pollQrStatus();
+}
+
+function renderIntegrations(){
+  const channels = [
+    {key:'whatsapp', label:'WhatsApp Business Platform (official)', icon:'W', color:'var(--whatsapp)', hint:'WhatsApp phone_number_id', oauth:false},
+    {key:'facebook', label:'Facebook Lead Ads', icon:'f', color:'var(--facebook)', hint:'Facebook Page ID (advanced/manual)', oauth:true},
+    {key:'instagram', label:'Instagram', icon:'IG', color:'var(--instagram)', hint:'Instagram Business Account ID (advanced/manual)', oauth:true},
+  ];
+  document.getElementById('integrationCards').innerHTML = channels.map(c=>`
+    <div class="integration-card">
+      <div class="chan-icon" style="background:${c.color}">${c.icon}</div>
+      <div class="integration-info">
+        <h4>${c.label}</h4>
+        <p>${c.oauth ? 'Log in on Facebook itself — we only ever receive a token, never your password' : 'Paste the account ID from your Meta developer dashboard'}</p>
+        ${c.oauth ? '' : `<input id="chan_${c.key}" placeholder="${c.hint}">`}
+      </div>
+      ${c.oauth
+        ? `<button class="btn" style="width:auto;" onclick="startFacebookOAuth()">Continue with Facebook</button>`
+        : `<button class="btn-ghost" onclick="connectChannel('${c.key}')">Connect</button>`}
+    </div>`).join('');
+  document.getElementById('replyTemplate').value = settings.replyTemplate;
+}
+function startFacebookOAuth(){
+  // Real OAuth — the browser navigates to facebook.com itself. This app
+  // never sees a Facebook/Instagram password, only the token Meta returns.
+  window.location.href = '/api/oauth/facebook/start?token=' + encodeURIComponent(token);
+}
+async function connectChannel(key){
+  const val = document.getElementById('chan_'+key).value.trim();
+  if(!val) return;
+  await api('/api/channel-accounts', {method:'POST', body:{channel:key, accountId:val}});
+  alert(key+' connected. Point that platform\'s webhook URL to /api/webhooks/'+key+' on this server.');
+}
+async function saveTemplate(){
+  const template = document.getElementById('replyTemplate').value;
+  settings = await api('/api/me', {method:'PATCH', body:{replyTemplate: template}});
+  alert('Saved. New inbound leads will receive this reply automatically.');
+}
+
+// ---- Leads view ----
+function statusSlug(status){ return (status||'new').toLowerCase().replace(/\s+/g,'-'); }
+
+function renderLeadsListView(){
+  const el = document.getElementById('leadsListBody');
+  if(!el) return;
+  if(leadsCache.length===0){ el.innerHTML = '<div class="empty-hint">No leads yet — add one manually or import an Excel file.</div>'; return; }
+  el.innerHTML = leadsCache.map(l=>{
+    const ch = CHANNELS[l.channel] || {label:l.channel||'Manual', color:'#888', letter:(l.channel||'M')[0].toUpperCase()};
+    const due = fmtDue(l.next_followup_at);
+    const count = l.follow_up_count || 0;
+    return `<div class="lead-card">
+      <div class="avatar" style="width:36px;height:36px;">${initials(l.name)}<div class="chan-badge" style="background:${ch.color}">${ch.letter}</div></div>
+      <div class="lead-card-main">
+        <div class="name">${l.name}</div>
+        <div class="meta mono">${l.phone||'—'} ${l.assigned_staff ? '· '+l.assigned_staff : ''} ${l.email ? '· '+l.email : ''}</div>
+      </div>
+      <span class="status-pill status-${statusSlug(l.status)}">${l.status}</span>
+      <span class="followup-progress">${count}/6 follow-ups</span>
+      <span class="fu-due" style="background:${due.cls==='overdue'?'var(--danger-dim)':due.cls==='due'?'var(--amber-dim)':'var(--panel-alt)'};color:${due.cls==='overdue'?'var(--danger)':due.cls==='due'?'var(--amber)':'var(--text-muted)'};font-family:'IBM Plex Mono';font-size:11px;padding:3px 9px;border-radius:6px;">${l.next_followup_at ? due.text : 'no reminder'}</span>
+      <div style="display:flex;gap:6px;flex-shrink:0;">
+        <button class="qbtn on-busy ${l.status==='Busy'?'active':''}" onclick="setQuickStatus('${l.id}','Busy')">Busy</button>
+        <button class="qbtn on-interested ${l.status==='Interested'?'active':''}" onclick="setQuickStatus('${l.id}','Interested')">Interested</button>
+        <button class="qbtn on-qualified ${l.status==='Qualified'?'active':''}" onclick="setQuickStatus('${l.id}','Qualified')">Qualified</button>
+        <button class="qbtn on-not-interested ${l.status==='Not Interested'?'active':''}" onclick="setQuickStatus('${l.id}','Not Interested')">Not Interested</button>
+        <button class="qbtn contacted-btn" onclick="markContactedClick('${l.id}')">✓ Contacted</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function setQuickStatus(id, status){
+  await api(`/api/leads/${id}`, {method:'PATCH', body:{status}});
+  await refreshAll();
+}
+
+async function markContactedClick(id){
+  await api(`/api/leads/${id}/contacted`, {method:'POST'});
+  await refreshAll();
+}
+
+function toggleAddLeadForm(){
+  const form = document.getElementById('addLeadForm');
+  form.style.display = form.style.display==='none' ? 'block' : 'none';
+}
+
+async function submitNewLead(){
+  const name = document.getElementById('newLeadName').value.trim();
+  const phone = document.getElementById('newLeadPhone').value.trim();
+  const email = document.getElementById('newLeadEmail').value.trim();
+  const notes = document.getElementById('newLeadNotes').value.trim();
+  if(!name || !phone){ alert('Name and phone are both required.'); return; }
+  try{
+    const result = await api('/api/leads', {method:'POST', body:{name, phone, email, notes}});
+    document.getElementById('newLeadName').value = '';
+    document.getElementById('newLeadPhone').value = '';
+    document.getElementById('newLeadEmail').value = '';
+    document.getElementById('newLeadNotes').value = '';
+    toggleAddLeadForm();
+    await refreshAll();
+    if(result.duplicate) alert(`${result.name} already exists in the CRM (matched by phone number) — no duplicate was created.`);
+  }catch(e){ alert(e.message); }
+}
+
+// Reads an uploaded Excel file entirely in the browser (SheetJS), maps
+// common column-name variants to name/phone/email/notes, then sends the
+// parsed rows to the server for de-duplication and insertion.
+function handleExcelImport(event){
+  const file = event.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    try{
+      const wb = XLSX.read(e.target.result, {type:'array'});
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, {defval:''});
+      const mapped = rows.map(r => mapImportRow(r));
+      const result = await api('/api/leads/import', {method:'POST', body:{rows: mapped}});
+      document.getElementById('importSummary').innerHTML = `
+        <div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 16px;margin-bottom:14px;font-size:13px;">
+          Imported <b style="color:var(--teal);">${result.imported}</b> new lead(s).
+          ${result.skippedDuplicate ? `Skipped <b style="color:var(--amber);">${result.skippedDuplicate}</b> duplicate(s) already in the CRM.` : ''}
+          ${result.skippedInvalid ? `Skipped <b style="color:var(--danger);">${result.skippedInvalid}</b> row(s) missing a name or phone number.` : ''}
+        </div>`;
+      await refreshAll();
+    }catch(err){
+      alert('Could not read that file: ' + err.message);
+    }
+    event.target.value = '';
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function mapImportRow(row){
+  const get = (...keys) => {
+    for(const k of Object.keys(row)){
+      if(keys.includes(k.trim().toLowerCase())) return row[k];
+    }
+    return '';
+  };
+  return {
+    name: get('name','customer name','full name'),
+    phone: get('phone','phone number','mobile','mobile number','contact number'),
+    email: get('email','email address'),
+    notes: get('notes','remarks','comment','comments'),
+  };
+}
+
+// ---- Nav ----
+document.querySelectorAll('.nav-item[data-view]').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+    document.getElementById('view-'+btn.dataset.view).classList.add('active');
+    document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active', n===btn));
+    if(btn.dataset.view==='dashboard') renderDashboard();
+    if(btn.dataset.view==='followups') renderFollowups();
+    if(btn.dataset.view==='leads') renderLeadsListView();
+  });
+});
+
+// ---- Boot ----
+if(token && business){ enterApp(); } else { toggleAuthMode(); toggleAuthMode(); }
+</script>
+</body>
+</html>
