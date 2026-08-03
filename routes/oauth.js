@@ -14,8 +14,7 @@ require('dotenv').config();
 const APP_ID = process.env.META_APP_ID || '1562291278866375';
 const APP_SECRET = process.env.META_APP_SECRET || '89341dffd359bd266d97ba05e2ea4125';
 const BASE_URL = process.env.PUBLIC_BASE_URL || 'http://localhost:3000';
-const SCOPES = 'pages_show_list,pages_messaging,leads_retrieval,instagram_basic,instagram_manage_messages,pages_manage_metadata';
-
+const SCOPES = 'pages_show_list,pages_messaging,pages_manage_metadata,instagram_basic';
 function notConfigured() {
   return {
     status: 200,
