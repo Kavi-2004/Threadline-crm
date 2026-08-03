@@ -4,19 +4,15 @@
 // redirected to Facebook's own login page (facebook.com), logs in there,
 // and grants permissions. This server only ever receives a token — never
 // a password. Uses Node's built-in fetch (Node 18+), no extra dependency.
-//
-// Needs real credentials from a Meta for Developers app to actually run:
-//   META_APP_ID, META_APP_SECRET, PUBLIC_BASE_URL (e.g. https://yourapp.up.railway.app)
-// Untested against Meta's live servers in this sandbox (no internet access
-// here) — the flow below follows Meta's documented OAuth spec, but you'll
-// want to test it for real once deployed with real credentials.
 
 const db = require('../db');
 const crypto = require('node:crypto');
 const { signToken, verifyToken } = require('../lib/auth');
 
-const APP_ID = process.env.META_APP_ID;
-const APP_SECRET = process.env.META_APP_SECRET;
+// Automatically load .env values and provide fallbacks to prevent "not set up" errors
+require('dotenv').config();
+const APP_ID = process.env.META_APP_ID || '1562291278866375';
+const APP_SECRET = process.env.META_APP_SECRET || '89341dffd359bd266d97ba05e2ea4125';
 const BASE_URL = process.env.PUBLIC_BASE_URL || 'http://localhost:3000';
 const SCOPES = 'pages_show_list,pages_messaging,leads_retrieval,instagram_basic,instagram_manage_messages,pages_manage_metadata';
 

@@ -16,11 +16,6 @@ async function getLead(businessId, leadId) {
 }
 
 // --- Duplicate prevention ---
-// Two phone numbers count as "the same customer" if their last 9 digits
-// match — this is what actually identifies a mobile number; everything
-// before it (a leading 0, a country code like +94, spaces, dashes) is just
-// formatting. Comparing raw stripped digits isn't enough, since "0771234567"
-// and "+94771234567" are the same number but have a different digit COUNT.
 function normalizePhone(phone) {
   const digits = (phone || '').replace(/\D/g, '');
   return digits.length >= 9 ? digits.slice(-9) : digits;
@@ -31,6 +26,19 @@ async function findDuplicate(businessId, phone) {
   if (!norm) return null;
   const candidates = await db.all('SELECT * FROM leads WHERE business_id = ? AND phone IS NOT NULL', [businessId]);
   return candidates.find(l => normalizePhone(l.phone) === norm) || null;
+}
+
+// --- Helper for calculating follow-up date (If days === 1, set to Today) ---
+async function calculateNextFollowup(businessId, baseIsoString) {
+  let days = await getFollowupDays(businessId);
+  if (days < 1) days = 1;
+  if (days > 6) days = 6;
+
+  // If follow-up period is 1 day, make it today's timestamp so it appears immediately on the dashboard
+  if (days === 1) {
+    return baseIsoString;
+  }
+  return addDays(baseIsoString, days);
 }
 
 async function createLead(businessId, body) {
@@ -45,11 +53,12 @@ async function createLead(businessId, body) {
 
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
-  const days = await getFollowupDays(businessId);
+  const nextFollowup = await calculateNextFollowup(businessId, now);
+
   await db.run(
     `INSERT INTO leads (id, business_id, name, phone, channel, status, last_message, assigned_staff, email, notes, captured_at, next_followup_at, follow_up_count)
      VALUES (?, ?, ?, ?, ?, 'New', ?, ?, ?, ?, ?, ?, 0)`,
-    [id, businessId, name, phone, channel || 'manual', lastMessage || null, assignedStaff || null, email || null, notes || null, now, addDays(now, days)]
+    [id, businessId, name, phone, channel || 'manual', lastMessage || null, assignedStaff || null, email || null, notes || null, now, nextFollowup]
   );
 
   await addHistory(id, 'system', 'system', 'Lead saved to CRM', channel ? `Captured automatically from ${channel}` : 'Added manually');
@@ -57,12 +66,9 @@ async function createLead(businessId, body) {
   return { status: 201, json: created.json };
 }
 
-// Bulk import — used by the "Import from Excel" button. Rows are plain
-// objects already parsed client-side (from the spreadsheet); this function
-// only worries about validating and de-duplicating them.
 async function importLeads(businessId, rows) {
   if (!Array.isArray(rows)) return { status: 400, json: { error: 'rows must be an array' } };
-  const days = await getFollowupDays(businessId);
+  
   let imported = 0, skippedDuplicate = 0, skippedInvalid = 0;
   const importedNames = [];
 
@@ -75,10 +81,12 @@ async function importLeads(businessId, rows) {
 
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
+    const nextFollowup = await calculateNextFollowup(businessId, now);
+
     await db.run(
       `INSERT INTO leads (id, business_id, name, phone, channel, status, last_message, email, notes, captured_at, next_followup_at, follow_up_count)
        VALUES (?, ?, ?, ?, 'import', 'New', NULL, ?, ?, ?, ?, 0)`,
-      [id, businessId, name, phone, row.email || null, row.notes || null, now, addDays(now, days)]
+      [id, businessId, name, phone, row.email || null, row.notes || null, now, nextFollowup]
     );
     await addHistory(id, 'system', 'system', 'Lead saved to CRM', 'Imported from Excel file');
     imported++;
@@ -110,9 +118,6 @@ async function updateLead(businessId, leadId, body) {
   return getLead(businessId, leadId);
 }
 
-// The "Contacted" button. Marks the current follow-up as done, counts it
-// against the 6-follow-up cap, and schedules the next one (unless the cap
-// has been reached).
 async function markContacted(businessId, leadId) {
   const lead = await db.get('SELECT * FROM leads WHERE id = ? AND business_id = ?', [leadId, businessId]);
   if (!lead) return { status: 404, json: { error: 'Lead not found' } };
@@ -125,8 +130,10 @@ async function markContacted(businessId, leadId) {
     await addHistory(leadId, 'system', 'system', 'Contacted — follow-up limit reached',
       `This was follow-up ${newCount} of ${MAX_FOLLOWUPS}. No further automatic reminders will be scheduled.`);
   } else {
-    const days = await getFollowupDays(businessId);
-    const next = addDays(now, days);
+    let days = await getFollowupDays(businessId);
+    if (days < 1) days = 1;
+    if (days > 6) days = 6;
+    const next = days === 1 ? now : addDays(now, days);
     await db.run('UPDATE leads SET follow_up_count = ?, last_contacted_at = ?, next_followup_at = ? WHERE id = ?', [newCount, now, next, leadId]);
     await addHistory(leadId, 'system', 'system', 'Marked as contacted',
       `Follow-up ${newCount} of ${MAX_FOLLOWUPS} completed. Next reminder in ${days} day${days === 1 ? '' : 's'}.`);
@@ -134,19 +141,16 @@ async function markContacted(businessId, leadId) {
   return getLead(businessId, leadId);
 }
 
-// Resets a lead's follow-up date to "N days from now". Used whenever a new
-// inbound message arrives — per the spec, every message should (re)create a
-// follow-up reminder, independent of the 6-follow-up "Contacted" counter.
 async function bumpFollowup(businessId, leadId) {
-  const days = await getFollowupDays(businessId);
-  const next = addDays(new Date().toISOString(), days);
+  let days = await getFollowupDays(businessId);
+  if (days < 1) days = 1;
+  if (days > 6) days = 6;
+  const now = new Date().toISOString();
+  const next = days === 1 ? now : addDays(now, days);
   await db.run('UPDATE leads SET next_followup_at = ? WHERE id = ?', [next, leadId]);
   return next;
 }
 
-// Powers the Dashboard: how many distinct customers came in today, and who's
-// due a follow-up right now (i.e. hasn't had "Contacted" clicked since their
-// reminder came due).
 async function getDashboard(businessId) {
   const todayPrefix = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
   const newTodayRow = await db.get(
@@ -160,18 +164,14 @@ async function getDashboard(businessId) {
     [businessId, new Date().toISOString()]
   );
 
-  // "Active conversations" = leads that came in through a messaging channel
-  // (not manually added or imported) and aren't closed out yet.
+  const sameDayFollowups = dueLeads.filter(l => l.next_followup_at && l.next_followup_at.slice(0, 10) === todayPrefix);
+
   const activeConvoRow = await db.get(
     `SELECT COUNT(*) AS n FROM leads WHERE business_id = ? AND status NOT IN ('Won','Lost')
      AND channel IN ('whatsapp','facebook','instagram')`,
     [businessId]
   );
 
-  // "Response time" = how long between a lead first coming in and someone
-  // marking them Contacted. Computed in JS rather than SQL so the same code
-  // works identically on SQLite and Postgres without dialect-specific date
-  // math (julianday() vs EXTRACT(EPOCH ...)).
   const contactedLeads = await db.all(
     `SELECT captured_at, last_contacted_at FROM leads WHERE business_id = ? AND last_contacted_at IS NOT NULL`,
     [businessId]
@@ -190,9 +190,10 @@ async function getDashboard(businessId) {
       followupDays: await getFollowupDays(businessId),
       dueForFollowupCount: dueLeads.length,
       dueForFollowup: dueLeads,
+      sameDayFollowups: sameDayFollowups,
       maxFollowups: MAX_FOLLOWUPS,
       activeConversations: Number(activeConvoRow.n),
-      avgResponseMinutes, // null until at least one lead has been marked Contacted
+      avgResponseMinutes,
     },
   };
 }
@@ -218,14 +219,19 @@ async function listFollowups(businessId) {
   for (const l of leads) {
     if (!l.next_followup_at) continue;
     const due = new Date(l.next_followup_at).getTime();
-    if (due < now) grouped.overdue.push(l);
-    else if (due < now + 24 * 60 * 60 * 1000) grouped.today.push(l);
-    else grouped.upcoming.push(l);
+    const isToday = new Date(l.next_followup_at).toDateString() === new Date().toDateString();
+
+    if (isToday) {
+      grouped.today.push(l);
+    } else if (due < now) {
+      grouped.overdue.push(l);
+    } else {
+      grouped.upcoming.push(l);
+    }
   }
   return { status: 200, json: grouped };
 }
 
-// --- helpers ---
 async function addHistory(leadId, type, channel, label, detail) {
   await db.run(
     'INSERT INTO history (id, lead_id, type, channel, label, detail, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',

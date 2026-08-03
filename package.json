@@ -3,9 +3,16 @@
   "version": "1.0.0",
   "description": "Multi-tenant CRM: capture leads from WhatsApp/Facebook/Instagram, auto-reply, track follow-ups",
   "main": "server.js",
-  "scripts": { "start": "node server.js" },
-  "engines": { "node": ">=22.5.0" },
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=22.5.0"
+  },
   "optionalDependencies": {
     "pg": "^8.11.0"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2"
   }
 }

@@ -1,10 +1,4 @@
 // routes/webhooks.js
-//
-// These are the endpoints Meta calls when a customer messages you on
-// WhatsApp, comments/DMs on Instagram, or fills a Facebook Lead Ad form.
-// sendAutoReply() logs what would be sent by default; pass a realSendFn to
-// actually deliver it (used by the live QR-connected WhatsApp session).
-
 const crypto = require('node:crypto');
 const db = require('../db');
 const { addHistory, getFollowupDays, bumpFollowup } = require('./leads');
@@ -33,9 +27,6 @@ async function getOrCreateLead(businessId, channel, senderId, senderName, phone,
     await addHistory(id, 'system', 'system', 'Lead saved to CRM', `Captured automatically from ${channel}`);
   } else {
     await db.run('UPDATE leads SET last_message = ? WHERE id = ?', [messageText, lead.id]);
-    // Per spec: any inbound message re-creates the follow-up reminder, even
-    // for a customer who already exists — so the dashboard always reflects
-    // "last message was N days ago", not just "first ever contact".
     await bumpFollowup(businessId, lead.id);
     lead = await db.get('SELECT * FROM leads WHERE id = ?', [lead.id]);
   }
@@ -49,8 +40,6 @@ async function sendAutoReply(businessId, lead, channel, realSendFn) {
   const message = (business.reply_template || 'Thanks for reaching out!').replace('{{first_name}}', firstName);
 
   if (realSendFn) {
-    // A live, connected channel (e.g. the QR-linked WhatsApp session) can
-    // actually deliver the message, not just log it.
     try {
       await realSendFn(message);
       await addHistory(lead.id, 'autoreply', channel, 'Auto-reply sent', message);
@@ -60,17 +49,10 @@ async function sendAutoReply(businessId, lead, channel, realSendFn) {
     return;
   }
 
-  // --- Real send would go here, e.g. for the official WhatsApp Cloud API: ---
-  // await fetch(`https://graph.facebook.com/v20.0/${phoneNumberId}/messages`, {
-  //   method: 'POST',
-  //   headers: { Authorization: `Bearer ${ACCESS_TOKEN}`, 'Content-Type': 'application/json' },
-  //   body: JSON.stringify({ messaging_product: 'whatsapp', to: lead.phone, text: { body: message } })
-  // });
-
   await addHistory(lead.id, 'autoreply', channel, 'Auto-reply sent', message);
 }
 
-// --- WhatsApp ---
+// --- WhatsApp Webhook ---
 function verifyWhatsApp(query) {
   if (query['hub.mode'] === 'subscribe' && query['hub.verify_token'] === VERIFY_TOKEN) {
     return { status: 200, raw: query['hub.challenge'] };
@@ -84,7 +66,7 @@ async function handleWhatsApp(body) {
     const change = entry?.changes?.[0]?.value;
     const phoneNumberId = change?.metadata?.phone_number_id;
     const message = change?.messages?.[0];
-    if (!message) return { status: 200, json: { ignored: true } }; // status update, not a message
+    if (!message) return { status: 200, json: { ignored: true } };
 
     const businessId = await findBusinessId('whatsapp', phoneNumberId);
     if (!businessId) return { status: 200, json: { ignored: true, reason: 'Unmapped WhatsApp account' } };
@@ -98,7 +80,7 @@ async function handleWhatsApp(body) {
   }
 }
 
-// --- Facebook Lead Ads ---
+// --- Facebook Lead Ads Webhook ---
 async function handleFacebookLead(body) {
   try {
     const entry = body.entry?.[0];
@@ -107,8 +89,6 @@ async function handleFacebookLead(body) {
     const businessId = await findBusinessId('facebook', pageId);
     if (!businessId) return { status: 200, json: { ignored: true, reason: 'Unmapped Facebook page' } };
 
-    // In production you'd call the Graph API with change.leadgen_id to fetch
-    // the actual form field answers (name, phone, etc).
     const lead = await getOrCreateLead(businessId, 'facebook', change.leadgen_id, 'New Facebook lead', null, 'Submitted a lead form');
     await sendAutoReply(businessId, lead, 'facebook');
     return { status: 200, json: { ok: true, leadId: lead.id } };
@@ -117,7 +97,7 @@ async function handleFacebookLead(body) {
   }
 }
 
-// --- Instagram ---
+// --- Instagram Webhook ---
 async function handleInstagram(body) {
   try {
     const entry = body.entry?.[0];
@@ -140,7 +120,7 @@ async function connectChannelAccount(businessId, body) {
   const { channel, accountId } = body;
   if (!channel || !accountId) return { status: 400, json: { error: 'channel and accountId are required' } };
   await db.run(
-    `INSERT INTO channel_accounts (id, business_id, channel, account_id) VALUES (?, ?, ?, ?)
+    `INSERT INTO channel_accounts (id, business_id, channel, accountId) VALUES (?, ?, ?, ?)
      ON CONFLICT(channel, account_id) DO UPDATE SET business_id = excluded.business_id`,
     [crypto.randomUUID(), businessId, channel, accountId]
   );

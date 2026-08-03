@@ -1,7 +1,5 @@
-// server.js — the entry point. Built on Node's built-in http module (no
-// Express) so this runs with zero installed dependencies (SQLite mode).
-// For PostgreSQL, set DATABASE_URL and run `npm install pg` — see README.
-
+// server.js — Threadline CRM Entry Point
+require('dotenv').config();
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -49,15 +47,10 @@ async function getAuthedBusinessId(req) {
   if (!token) return null;
   const payload = verifyToken(token);
   if (!payload) return null;
-  // A syntactically valid token can still point at a business that no
-  // longer exists (e.g. the database was reset). Treat that the same as
-  // "not logged in" rather than letting individual endpoints 404 on it
-  // inconsistently.
   const business = await db.get('SELECT id FROM businesses WHERE id = ?', [payload.businessId]);
   return business ? payload.businessId : null;
 }
 
-// Serve the dashboard's static files (html/css/js)
 function serveStatic(req, res, urlPath) {
   const filePath = path.join(PUBLIC_DIR, urlPath === '/' ? 'index.html' : urlPath);
   if (!filePath.startsWith(PUBLIC_DIR)) return send(res, 403, { error: 'Forbidden' });
@@ -84,7 +77,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   try {
-    // ---- Public auth routes ----
+    // ---- Auth Routes ----
     if (p === '/api/auth/signup' && req.method === 'POST') {
       const r = await auth.signup(await readBody(req));
       return send(res, r.status, r.json);
@@ -94,7 +87,7 @@ const server = http.createServer(async (req, res) => {
       return send(res, r.status, r.json);
     }
 
-    // ---- Meta webhooks (public — Meta calls these directly, no user token) ----
+    // ---- Meta Webhooks (WhatsApp, Facebook, Instagram) ----
     if (p === '/api/webhooks/whatsapp' && req.method === 'GET') {
       const r = webhooks.verifyWhatsApp(Object.fromEntries(url.searchParams));
       if (r.raw) { res.writeHead(r.status); return res.end(r.raw); }
@@ -113,7 +106,7 @@ const server = http.createServer(async (req, res) => {
       return send(res, r.status, r.json);
     }
 
-    // ---- OAuth (public — the browser navigates here directly, no auth header) ----
+    // ---- OAuth (Facebook / Instagram Login) ----
     if (p === '/api/oauth/facebook/start' && req.method === 'GET') {
       const r = oauth.startFacebookLogin(Object.fromEntries(url.searchParams));
       if (r.redirect) return sendRedirect(res, r.redirect);
@@ -125,7 +118,7 @@ const server = http.createServer(async (req, res) => {
       return sendHtml(res, r.status, r.html);
     }
 
-    // ---- Everything below requires a logged-in business ----
+    // ---- Protected API Endpoints (Requires Login) ----
     if (p.startsWith('/api/')) {
       const businessId = await getAuthedBusinessId(req);
       if (!businessId) return send(res, 401, { error: 'Missing or invalid auth token' });
@@ -164,42 +157,6 @@ const server = http.createServer(async (req, res) => {
         return send(res, r.status, r.json);
       }
 
-      // --- QR-based WhatsApp connection (disabled by default — not linked
-      // from the UI. See whatsapp/qr-session.js for why.) ---
-      if (p === '/api/whatsapp-qr/start' && req.method === 'POST') {
-        try {
-          const qrSession = require('./whatsapp/qr-session');
-          await qrSession.startSession(businessId);
-          return send(res, 200, qrSession.getStatus(businessId));
-        } catch (err) {
-          if (err.code === 'MODULE_NOT_FOUND') {
-            // Not an error — an expected, handled state. A 500 here would
-            // wrongly suggest something broke, when really it's just "this
-            // optional feature hasn't been set up yet."
-            return send(res, 200, { status: 'not_installed', error: 'Missing dependency. Run: npm install @whiskeysockets/baileys qrcode pino' });
-          }
-          return send(res, 500, { error: err.message });
-        }
-      }
-      if (p === '/api/whatsapp-qr/status' && req.method === 'GET') {
-        try {
-          const qrSession = require('./whatsapp/qr-session');
-          return send(res, 200, qrSession.getStatus(businessId));
-        } catch (err) {
-          if (err.code === 'MODULE_NOT_FOUND') return send(res, 200, { status: 'not_installed' });
-          return send(res, 500, { error: err.message });
-        }
-      }
-      if (p === '/api/whatsapp-qr/disconnect' && req.method === 'POST') {
-        try {
-          const qrSession = require('./whatsapp/qr-session');
-          await qrSession.disconnectSession(businessId);
-          return send(res, 200, { disconnected: true });
-        } catch (err) {
-          return send(res, 500, { error: err.message });
-        }
-      }
-
       const leadMatch = p.match(/^\/api\/leads\/([^/]+)$/);
       if (leadMatch && req.method === 'GET') {
         const r = await leads.getLead(businessId, leadMatch[1]);
@@ -225,20 +182,16 @@ const server = http.createServer(async (req, res) => {
       return send(res, 404, { error: 'Not found' });
     }
 
-    // ---- Static dashboard files ----
     return serveStatic(req, res, p);
   } catch (err) {
     return send(res, 500, { error: err.message });
   }
 });
 
-// Schema must be ready before the server accepts any requests — this runs
-// once at startup, works identically whether the backend is SQLite or
-// PostgreSQL.
 db.initSchema()
   .then(() => {
     server.listen(PORT, () => {
-      console.log(`Threadline CRM server running at http://localhost:${PORT} (database: ${db.isPostgres ? 'PostgreSQL' : 'SQLite'})`);
+      console.log(`Threadline CRM server running at http://localhost:${PORT}`);
     });
   })
   .catch(err => {

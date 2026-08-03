@@ -1,39 +1,41 @@
 const db = require('../db');
 
 async function getMe(businessId) {
-  const b = await db.get('SELECT * FROM businesses WHERE id = ?', [businessId]);
+  const b = await db.get('SELECT id, name, reply_template, followup_days, staff_list, created_at FROM businesses WHERE id = ?', [businessId]);
   if (!b) return { status: 404, json: { error: 'Business not found' } };
   return {
     status: 200,
     json: {
-      id: b.id,
-      name: b.name,
-      replyTemplate: b.reply_template,
-      followupDays: b.followup_days,
-      staffList: JSON.parse(b.staff_list || '[]'),
+      ...b,
+      staff_list: JSON.parse(b.staff_list || '[]'),
     },
   };
 }
 
 async function updateMe(businessId, body) {
-  const { replyTemplate, followupDays, staffList } = body;
+  const { name, replyTemplate, followupDays, staffList } = body;
+  
+  // Strict Validation: Follow-up period must be between 1 and 6
+  if (followupDays !== undefined) {
+    const daysNum = Number(followupDays);
+    if (isNaN(daysNum) || daysNum < 1 || daysNum > 6) {
+      return { status: 400, json: { error: 'Follow-up period එක දින 1 සහ 6 අතර අගයක් විය යුතුය!' } };
+    }
+  }
+
   const b = await db.get('SELECT * FROM businesses WHERE id = ?', [businessId]);
   if (!b) return { status: 404, json: { error: 'Business not found' } };
 
-  if (replyTemplate !== undefined) {
-    await db.run('UPDATE businesses SET reply_template = ? WHERE id = ?', [replyTemplate, businessId]);
-  }
-  if (followupDays !== undefined) {
-    const days = parseInt(followupDays, 10);
-    if (!Number.isInteger(days) || days < 1) {
-      return { status: 400, json: { error: 'followupDays must be a whole number of at least 1' } };
-    }
-    await db.run('UPDATE businesses SET followup_days = ? WHERE id = ?', [days, businessId]);
-  }
-  if (staffList !== undefined) {
-    if (!Array.isArray(staffList)) return { status: 400, json: { error: 'staffList must be an array of names' } };
-    await db.run('UPDATE businesses SET staff_list = ? WHERE id = ?', [JSON.stringify(staffList), businessId]);
-  }
+  const newName = name !== undefined ? name : b.name;
+  const newTemplate = replyTemplate !== undefined ? replyTemplate : b.reply_template;
+  const newDays = followupDays !== undefined ? Number(followupDays) : b.followup_days;
+  const newStaff = staffList !== undefined ? JSON.stringify(staffList) : b.staff_list;
+
+  await db.run(
+    'UPDATE businesses SET name = ?, reply_template = ?, followup_days = ?, staff_list = ? WHERE id = ?',
+    [newName, newTemplate, newDays, newStaff, businessId]
+  );
+
   return getMe(businessId);
 }
 

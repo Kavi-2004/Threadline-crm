@@ -141,46 +141,28 @@
   textarea{width:100%;background:var(--panel-alt);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-size:13px;min-height:70px;}
   .empty-hint{color:var(--text-dim);font-size:12.5px;padding:16px;}
 
-  /* ==========================================================
-     Responsive — tablet & phone (≤860px)
-     ========================================================== */
   @media (max-width: 860px){
     .auth-box{width:90vw;max-width:340px;}
-
-    /* App shell: sidebar becomes a fixed bottom nav bar instead of a
-       left column. column-reverse flips it below the main content
-       without needing to reorder any markup. */
     .app.active{display:flex;flex-direction:column-reverse;height:100dvh;}
     .sidebar{flex-direction:row;align-items:center;padding:6px 4px;border-right:none;border-top:1px solid var(--border);overflow-x:auto;flex-shrink:0;}
     .brand,.biz-name{display:none;}
     .nav-item{flex-direction:column;gap:2px;flex:1;min-width:64px;text-align:center;justify-content:center;font-size:11px;padding:8px 4px;min-height:44px;}
-
     .main{flex:1;min-height:0;}
-
-    /* Inbox: list + detail stack instead of sitting side by side */
     #view-inbox{flex-direction:column;}
     .inbox-list{width:100%;max-height:38vh;border-right:none;border-bottom:1px solid var(--border);}
     .detail{min-height:0;}
     .detail-body{grid-template-columns:1fr;}
     .detail-head{flex-wrap:wrap;}
     .detail-actions{margin-left:0;width:100%;}
-
-    /* Lead cards & follow-up rows: wrap instead of overflowing */
     .lead-card,.fu-row{flex-wrap:wrap;}
     .lead-card .lead-card-main,.fu-row .fu-main{min-width:150px;}
     .lead-card > div:last-child{width:100%;justify-content:flex-start;margin-top:4px;}
-
     .dash-stat-card{gap:20px;padding:16px;}
     .dash-stat-value{font-size:24px;}
-
     .add-lead-grid{grid-template-columns:1fr;}
-
     .integration-card{flex-wrap:wrap;}
     .integration-info input{width:100%;}
-
     .settings-view,.leads-view,.followups{padding:16px;}
-
-    /* Bigger touch targets throughout */
     .btn,.btn-ghost,.qbtn{padding:10px 14px;}
   }
 </style>
@@ -333,7 +315,7 @@
 </div>
 
 <script>
-const API = ''; // same origin
+const API = ''; 
 let token = localStorage.getItem('threadline_token');
 let business = JSON.parse(localStorage.getItem('threadline_business') || 'null');
 let authMode = 'signup';
@@ -363,7 +345,6 @@ function fmtDue(iso){
   if(mins < 1440) return {text:'in '+Math.round(mins/60)+'h', cls:'due'};
   return {text:'in '+Math.round(mins/1440)+'d', cls:''};
 }
-// avgResponseMinutes is null until at least one lead has been marked Contacted.
 function formatResponseTime(mins){
   if(mins === null || mins === undefined) return '—';
   if(mins < 60) return mins+'m';
@@ -379,9 +360,6 @@ async function api(path, opts={}){
   });
   const json = await res.json().catch(()=>({}));
   if(res.status === 401){
-    // Token is either missing, expired, or points at a business that no
-    // longer exists (e.g. a fresh database during development). Rather than
-    // leaving the app half-loaded with silent failures, drop back to login.
     localStorage.removeItem('threadline_token');
     localStorage.removeItem('threadline_business');
     alert('Your session has expired or is no longer valid. Please log in again.');
@@ -392,7 +370,6 @@ async function api(path, opts={}){
   return json;
 }
 
-// ---- Auth ----
 function toggleAuthMode(){
   authMode = authMode === 'signup' ? 'login' : 'signup';
   document.getElementById('authTitle').textContent = authMode==='signup' ? 'Create your account' : 'Welcome back';
@@ -433,14 +410,27 @@ async function enterApp(){
   document.getElementById('bizNameLabel').textContent = business.name;
   document.getElementById('bizEmailLabel').textContent = business.email;
   document.getElementById('settingsBizEmail').textContent = business.email;
-  settings = await api('/api/me');
+  
+  try {
+    settings = await api('/api/me');
+  } catch(e) {
+    settings = { replyTemplate: '', followupDays: 3, staffList: [] };
+  }
+  if(!settings) settings = { replyTemplate: '', followupDays: 3, staffList: [] };
+  if(!settings.replyTemplate) settings.replyTemplate = '';
+
   await refreshAll();
   renderIntegrations();
   renderSettingsPanels();
-  pollQrStatus();
+  
+  try {
+    pollQrStatus();
+  } catch(err) {
+    const qrArea = document.getElementById('qrConnectArea');
+    if(qrArea) qrArea.innerHTML = `<div class="empty-hint">QR connect feature requires backend support.</div>`;
+  }
 }
 
-// ---- Data refresh ----
 async function refreshAll(){
   leadsCache = await api('/api/leads');
   renderInboxList();
@@ -449,7 +439,6 @@ async function refreshAll(){
   renderLeadsListView();
 }
 
-// ---- Dashboard ----
 async function renderDashboard(){
   const d = await api('/api/dashboard');
   document.getElementById('dashNewToday').textContent = d.newLeadsToday;
@@ -483,7 +472,6 @@ function goToLead(id){
   selectLead(id);
 }
 
-// ---- Settings: follow-up period + staff ----
 function renderSettingsPanels(){
   const preset = document.getElementById('followupPreset');
   const custom = document.getElementById('followupCustomDays');
@@ -510,8 +498,9 @@ async function saveFollowupPeriod(){
 }
 function renderStaffChips(){
   const el = document.getElementById('staffChips');
-  if(settings.staffList.length===0){ el.innerHTML = '<span style="color:var(--text-dim);font-size:12.5px;">No staff added yet.</span>'; return; }
-  el.innerHTML = settings.staffList.map(name => `
+  const staff = settings?.staffList || [];
+  if(staff.length===0){ el.innerHTML = '<span style="color:var(--text-dim);font-size:12.5px;">No staff added yet.</span>'; return; }
+  el.innerHTML = staff.map(name => `
     <span style="background:var(--panel-alt);border:1px solid var(--border);border-radius:20px;padding:5px 12px;font-size:12.5px;display:inline-flex;align-items:center;gap:8px;">
       ${name} <span style="cursor:pointer;color:var(--danger);" onclick="removeStaff('${name.replace(/'/g,"\\'")}')">✕</span>
     </span>`).join('');
@@ -520,21 +509,23 @@ async function addStaff(){
   const input = document.getElementById('newStaffName');
   const name = input.value.trim();
   if(!name) return;
-  if(settings.staffList.includes(name)){ input.value=''; return; }
-  const newList = [...settings.staffList, name];
+  const staff = settings?.staffList || [];
+  if(staff.includes(name)){ input.value=''; return; }
+  const newList = [...staff, name];
   settings = await api('/api/me', {method:'PATCH', body:{staffList:newList}});
   input.value = '';
   renderStaffChips();
 }
 async function removeStaff(name){
-  const newList = settings.staffList.filter(s=>s!==name);
+  const staff = settings?.staffList || [];
+  const newList = staff.filter(s=>s!==name);
   settings = await api('/api/me', {method:'PATCH', body:{staffList:newList}});
   renderStaffChips();
 }
 
 function renderInboxList(){
   const el = document.getElementById('inboxList');
-  if(leadsCache.length===0){ el.innerHTML = '<div class="empty-hint">No leads yet. Connect a channel under Integrations, or send a test webhook — see README.</div>'; return; }
+  if(leadsCache.length===0){ el.innerHTML = '<div class="empty-hint">No leads yet. Connect a channel under Integrations, or send a test webhook.</div>'; return; }
   el.innerHTML = leadsCache.map(l=>{
     const ch = CHANNELS[l.channel] || {label:l.channel, color:'#888', letter:'?'};
     return `<div class="lead-row ${l.id===selectedId?'selected':''}" onclick="selectLead('${l.id}')">
@@ -567,6 +558,9 @@ function renderDetail(l){
   const panel = document.getElementById('detailPanel');
   const ch = CHANNELS[l.channel] || {label:l.channel, color:'#888', letter:'?'};
   const due = fmtDue(l.next_followup_at);
+  const staffList = settings?.staffList || [];
+  const historyList = l?.history || [];
+
   panel.innerHTML = `
     <div class="detail-head">
       <div class="avatar" style="width:46px;height:46px;border-radius:12px;font-size:16px;">${initials(l.name)}<div class="chan-badge" style="background:${ch.color}">${ch.letter}</div></div>
@@ -579,7 +573,7 @@ function renderDetail(l){
       <div class="field-card">
         <h3>Activity &amp; follow-up history</h3>
         <div class="timeline">
-          ${l.history.map(h=>`
+          ${historyList.map(h=>`
             <div class="tl-item">
               <div class="tl-dot" style="background:${tlDotColor(h.channel)}"></div>
               <div><div class="tl-top"><span class="tl-label">${h.label}</span><span class="tl-time mono">${timeAgo(h.created_at)}</span></div>
@@ -600,7 +594,7 @@ function renderDetail(l){
           <div class="field-row"><span class="k">Assigned staff</span><span>
             <select class="status-select" onchange="assignStaff('${l.id}', this.value)">
               <option value="" ${!l.assigned_staff?'selected':''}>Unassigned</option>
-              ${settings.staffList.map(s=>`<option ${s===l.assigned_staff?'selected':''}>${s}</option>`).join('')}
+              ${staffList.map(s=>`<option ${s===l.assigned_staff?'selected':''}>${s}</option>`).join('')}
             </select></span></div>
           <div class="field-row"><span class="k">Next follow-up</span><span style="color:${due.cls==='overdue'?'var(--danger)':due.cls==='due'?'var(--amber)':'var(--text)'}">${due.text}</span></div>
         </div>
@@ -617,8 +611,6 @@ function renderDetail(l){
 }
 
 async function logCall(id){
-  // The server restarts the follow-up clock automatically (using the
-  // configured follow-up period) whenever a call is logged.
   await api(`/api/leads/${id}/history`, {method:'POST', body:{type:'call', channel:'call', label:'Outbound call logged', detail:'Call logged manually just now'}});
   await refreshAll();
   if(document.getElementById('view-inbox').classList.contains('active')) selectLead(id);
@@ -632,7 +624,8 @@ async function assignStaff(id, val){
   await refreshAll(); selectLead(id);
 }
 async function bumpFollowupClick(id){
-  const next = new Date(Date.now() + settings.followupDays*24*3600*1000).toISOString();
+  const days = Number(settings?.followupDays) || 3;
+  const next = new Date(Date.now() + days * 24 * 3600 * 1000).toISOString();
   await api(`/api/leads/${id}`, {method:'PATCH', body:{nextFollowupAt: next}});
   await refreshAll(); selectLead(id);
 }
@@ -660,14 +653,13 @@ async function renderFollowups(){
   }).join('') || '<div class="empty-hint">No follow-ups scheduled yet.</div>';
 }
 
-// ---- WhatsApp QR connect (unofficial) ----
 let qrPollTimer = null;
 
 function renderQrArea(data){
   const el = document.getElementById('qrConnectArea');
   if(!el) return;
   if(data.status === 'not_installed'){
-    el.innerHTML = `<div class="empty-hint">Not set up on this server yet. The server admin needs to run <code>npm install @whiskeysockets/baileys qrcode pino</code> and restart.</div>`;
+    el.innerHTML = `<div class="empty-hint">Not set up on this server yet.</div>`;
   } else if(data.status === 'not_connected' || data.status === 'disconnected'){
     el.innerHTML = `<button class="btn-ghost" onclick="startQrConnect()">Connect via QR code</button>`;
   } else if(data.status === 'connecting'){
@@ -676,11 +668,11 @@ function renderQrArea(data){
     el.innerHTML = `
       <div style="display:flex;align-items:center;gap:16px;">
         <img src="${data.qrDataUrl}" style="width:180px;height:180px;border-radius:8px;background:#fff;padding:8px;">
-        <div style="font-size:12.5px;color:var(--text-muted);max-width:260px;">Open WhatsApp on the phone you want to connect → Settings → Linked Devices → Link a Device, then scan this code.</div>
+        <div style="font-size:12.5px;color:var(--text-muted);max-width:260px;">Open WhatsApp on your phone → Settings → Linked Devices → Link a Device, then scan this code.</div>
       </div>`;
   } else if(data.status === 'connected'){
     el.innerHTML = `<div style="display:flex;align-items:center;gap:10px;">
-      <span class="status-connected"><span class="dot on" style="background:var(--whatsapp);color:var(--whatsapp);"></span>Connected</span>
+      <span style="color:var(--whatsapp);font-weight:600;">Connected</span>
       <button class="btn-ghost" onclick="disconnectQr()">Disconnect</button>
     </div>`;
   }
@@ -693,7 +685,7 @@ async function pollQrStatus(){
     if(data.status === 'waiting_scan' || data.status === 'connecting'){
       qrPollTimer = setTimeout(pollQrStatus, 2000);
     }
-  }catch(e){ /* ignore transient poll errors */ }
+  }catch(e){}
 }
 
 async function startQrConnect(){
@@ -720,15 +712,15 @@ async function disconnectQr(){
 function renderIntegrations(){
   const channels = [
     {key:'whatsapp', label:'WhatsApp Business Platform (official)', icon:'W', color:'var(--whatsapp)', hint:'WhatsApp phone_number_id', oauth:false},
-    {key:'facebook', label:'Facebook Lead Ads', icon:'f', color:'var(--facebook)', hint:'Facebook Page ID (advanced/manual)', oauth:true},
-    {key:'instagram', label:'Instagram', icon:'IG', color:'var(--instagram)', hint:'Instagram Business Account ID (advanced/manual)', oauth:true},
+    {key:'facebook', label:'Facebook Lead Ads', icon:'f', color:'var(--facebook)', hint:'Facebook Page ID', oauth:true},
+    {key:'instagram', label:'Instagram', icon:'IG', color:'var(--instagram)', hint:'Instagram Account ID', oauth:true},
   ];
   document.getElementById('integrationCards').innerHTML = channels.map(c=>`
     <div class="integration-card">
       <div class="chan-icon" style="background:${c.color}">${c.icon}</div>
       <div class="integration-info">
         <h4>${c.label}</h4>
-        <p>${c.oauth ? 'Log in on Facebook itself — we only ever receive a token, never your password' : 'Paste the account ID from your Meta developer dashboard'}</p>
+        <p>${c.oauth ? 'Log in on Facebook itself' : 'Paste the account ID from your Meta developer dashboard'}</p>
         ${c.oauth ? '' : `<input id="chan_${c.key}" placeholder="${c.hint}">`}
       </div>
       ${c.oauth
@@ -738,29 +730,26 @@ function renderIntegrations(){
   document.getElementById('replyTemplate').value = settings.replyTemplate;
 }
 function startFacebookOAuth(){
-  // Real OAuth — the browser navigates to facebook.com itself. This app
-  // never sees a Facebook/Instagram password, only the token Meta returns.
   window.location.href = '/api/oauth/facebook/start?token=' + encodeURIComponent(token);
 }
 async function connectChannel(key){
   const val = document.getElementById('chan_'+key).value.trim();
   if(!val) return;
   await api('/api/channel-accounts', {method:'POST', body:{channel:key, accountId:val}});
-  alert(key+' connected. Point that platform\'s webhook URL to /api/webhooks/'+key+' on this server.');
+  alert(key+' connected.');
 }
 async function saveTemplate(){
   const template = document.getElementById('replyTemplate').value;
   settings = await api('/api/me', {method:'PATCH', body:{replyTemplate: template}});
-  alert('Saved. New inbound leads will receive this reply automatically.');
+  alert('Saved.');
 }
 
-// ---- Leads view ----
 function statusSlug(status){ return (status||'new').toLowerCase().replace(/\s+/g,'-'); }
 
 function renderLeadsListView(){
   const el = document.getElementById('leadsListBody');
   if(!el) return;
-  if(leadsCache.length===0){ el.innerHTML = '<div class="empty-hint">No leads yet — add one manually or import an Excel file.</div>'; return; }
+  if(leadsCache.length===0){ el.innerHTML = '<div class="empty-hint">No leads yet.</div>'; return; }
   el.innerHTML = leadsCache.map(l=>{
     const ch = CHANNELS[l.channel] || {label:l.channel||'Manual', color:'#888', letter:(l.channel||'M')[0].toUpperCase()};
     const due = fmtDue(l.next_followup_at);
@@ -814,37 +803,8 @@ async function submitNewLead(){
     document.getElementById('newLeadNotes').value = '';
     toggleAddLeadForm();
     await refreshAll();
-    if(result.duplicate) alert(`${result.name} already exists in the CRM (matched by phone number) — no duplicate was created.`);
+    if(result.duplicate) alert(`${result.name} already exists in the CRM.`);
   }catch(e){ alert(e.message); }
-}
-
-// Reads an uploaded Excel file entirely in the browser (SheetJS), maps
-// common column-name variants to name/phone/email/notes, then sends the
-// parsed rows to the server for de-duplication and insertion.
-function handleExcelImport(event){
-  const file = event.target.files[0];
-  if(!file) return;
-  const reader = new FileReader();
-  reader.onload = async (e) => {
-    try{
-      const wb = XLSX.read(e.target.result, {type:'array'});
-      const sheet = wb.Sheets[wb.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(sheet, {defval:''});
-      const mapped = rows.map(r => mapImportRow(r));
-      const result = await api('/api/leads/import', {method:'POST', body:{rows: mapped}});
-      document.getElementById('importSummary').innerHTML = `
-        <div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 16px;margin-bottom:14px;font-size:13px;">
-          Imported <b style="color:var(--teal);">${result.imported}</b> new lead(s).
-          ${result.skippedDuplicate ? `Skipped <b style="color:var(--amber);">${result.skippedDuplicate}</b> duplicate(s) already in the CRM.` : ''}
-          ${result.skippedInvalid ? `Skipped <b style="color:var(--danger);">${result.skippedInvalid}</b> row(s) missing a name or phone number.` : ''}
-        </div>`;
-      await refreshAll();
-    }catch(err){
-      alert('Could not read that file: ' + err.message);
-    }
-    event.target.value = '';
-  };
-  reader.readAsArrayBuffer(file);
 }
 
 function mapImportRow(row){
@@ -862,7 +822,39 @@ function mapImportRow(row){
   };
 }
 
-// ---- Nav ----
+async function handleExcelImport(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = async function(evt){
+    try{
+      const data = new Uint8Array(evt.target.result);
+      const workbook = XLSX.read(data, {type:'array'});
+      const firstSheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[firstSheetName];
+      const jsonRows = XLSX.utils.sheet_to_json(worksheet);
+      
+      const mappedRows = jsonRows.map(mapImportRow).filter(r => r.name && r.phone);
+      if(mappedRows.length === 0){
+        alert('No valid rows found. Ensure your Excel sheet has columns for Name and Phone.');
+        return;
+      }
+      
+      const res = await api('/api/leads/import', {method:'POST', body:{rows: mappedRows}});
+      document.getElementById('importSummary').innerHTML = `
+        <div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:13px;">
+          <b>Import complete:</b> Added ${res.added} new lead(s). Skipped ${res.skipped} duplicate(s).
+        </div>`;
+      await refreshAll();
+    }catch(err){
+      alert('Failed to import file: ' + err.message);
+    } finally {
+      e.target.value = '';
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
 document.querySelectorAll('.nav-item[data-view]').forEach(btn=>{
   btn.addEventListener('click', ()=>{
     document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
@@ -874,7 +866,6 @@ document.querySelectorAll('.nav-item[data-view]').forEach(btn=>{
   });
 });
 
-// ---- Boot ----
 if(token && business){ enterApp(); } else { toggleAuthMode(); toggleAuthMode(); }
 </script>
 </body>
