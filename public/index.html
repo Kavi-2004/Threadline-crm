@@ -522,23 +522,27 @@ function renderStaffChips(){
       ${name} <span style="cursor:pointer;color:var(--danger);" onclick="removeStaff('${name.replace(/'/g,"\\'")}')">✕</span>
     </span>`).join('');
 }
-async function addStaff(){
+async function addStaff() {
   const input = document.getElementById('newStaffName');
+  if (!input) return;
   const name = input.value.trim();
-  if(!name) return;
-  const staff = settings?.staffList || [];
-  if(staff.includes(name)){ input.value=''; return; }
+  if (!name) return;
+  const staff = settings?.staff || [];
+  if (staff.includes(name)) { input.value = ''; return; }
   const newList = [...staff, name];
-  settings = await api('/api/me', {method:'PATCH', body:{staffList:newList}});
+  settings = await api('/api/me', { method: 'PATCH', body: { staff: newList } });
   input.value = '';
   renderStaffChips();
 }
-async function removeStaff(name){
-  const staff = settings?.staffList || [];
-  const newList = staff.filter(s=>s!==name);
-  settings = await api('/api/me', {method:'PATCH', body:{staffList:newList}});
+
+async function removeStaff(name) {
+  const staff = settings?.staff || [];
+  const newList = staff.filter(s => s !== name);
+  settings = await api('/api/me', { method: 'PATCH', body: { staff: newList } });
   renderStaffChips();
 }
+
+
 
 function renderInboxList(){
   const el = document.getElementById('inboxList');
@@ -755,10 +759,20 @@ async function connectChannel(key){
   await api('/api/channel-accounts', {method:'POST', body:{channel:key, accountId:val}});
   alert(key+' connected.');
 }
-async function saveTemplate(){
-  const template = document.getElementById('replyTemplate').value;
-  settings = await api('/api/me', {method:'PATCH', body:{replyTemplate: template}});
-  alert('Saved.');
+async function saveTemplate() {
+  const textarea = document.getElementById('replyTemplate');
+  if (!textarea) return;
+  const templateText = textarea.value;
+
+  try {
+    settings = await api('/api/me', {
+      method: 'PATCH',
+      body: { autoReplyTemplate: templateText }
+    });
+    alert('Automatic reply template saved successfully!');
+  } catch (err) {
+    console.error('Failed to save template:', err);
+  }
 }
 
 function statusSlug(status){ return (status||'new').toLowerCase().replace(/\s+/g,'-'); }

@@ -37,7 +37,8 @@ async function getOrCreateLead(businessId, channel, senderId, senderName, phone,
 async function sendAutoReply(businessId, lead, channel, realSendFn) {
   const business = await db.get('SELECT * FROM businesses WHERE id = ?', [businessId]);
   const firstName = (lead.name || '').split(' ')[0] || 'there';
-  const message = (business.reply_template || 'Thanks for reaching out!').replace('{{first_name}}', firstName);
+  const template = business?.autoReplyTemplate || business?.reply_template || 'Thanks for reaching out!';
+  const message = template.replace('{{first_name}}', firstName);
 
   if (realSendFn) {
     try {
@@ -120,7 +121,7 @@ async function connectChannelAccount(businessId, body) {
   const { channel, accountId } = body;
   if (!channel || !accountId) return { status: 400, json: { error: 'channel and accountId are required' } };
   await db.run(
-    `INSERT INTO channel_accounts (id, business_id, channel, accountId) VALUES (?, ?, ?, ?)
+    `INSERT INTO channel_accounts (id, business_id, channel, account_id) VALUES (?, ?, ?, ?)
      ON CONFLICT(channel, account_id) DO UPDATE SET business_id = excluded.business_id`,
     [crypto.randomUUID(), businessId, channel, accountId]
   );
