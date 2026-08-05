@@ -289,22 +289,20 @@
         </div>
 
         <div class="template-box">
-  <h3 style="margin:0 0 10px;font-size:13px;color:var(--text-muted);">Staff</h3>
-  <div style="color:var(--text-muted);font-size:12.5px;margin-bottom:12px;">Add staff names so leads can be assigned to someone for follow-up.</div>
-  <div id="staffChips" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;"></div>
-  <div style="display:flex;gap:8px;">
-    <!-- මෙහි id="newStaffName" නිවැරදිව එකතු කර ඇත -->
-    <input id="newStaffName" placeholder="Staff name" style="flex:1;background:var(--panel-alt);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-size:13px;">
-    <button class="btn" style="width:auto;" onclick="addStaff()">Add</button>
-  </div>
-</div>
+          <h3 style="margin:0 0 10px;font-size:13px;color:var(--text-muted);">Staff</h3>
+          <div style="color:var(--text-muted);font-size:12.5px;margin-bottom:12px;">Add staff names so leads can be assigned to someone for follow-up.</div>
+          <div id="staffChips" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;"></div>
+          <div style="display:flex;gap:8px;">
+            <input id="newStaffName" placeholder="Staff name" style="flex:1;background:var(--panel-alt);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-size:13px;">
+            <button class="btn" style="width:auto;" onclick="addStaff()">Add</button>
+          </div>
+        </div>
 
         <div class="template-box">
-  <h3 style="margin:0 0 10px;font-size:13px;color:var(--text-muted);">Automatic reply template</h3>
-  <!-- මෙහි id="replyTemplate" නිවැරදිව එකතු කර ඇත -->
-  <textarea id="replyTemplate" style="width:100%;min-height:80px;background:var(--panel-alt);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-size:13px;"></textarea>
-  <div style="display:flex;justify-content:flex-end;margin-top:10px;"><button class="btn" style="width:auto;" onclick="saveTemplate()">Save template</button></div>
-</div>
+          <h3 style="margin:0 0 10px;font-size:13px;color:var(--text-muted);">Automatic reply template</h3>
+          <textarea id="replyTemplate" style="width:100%;min-height:80px;background:var(--panel-alt);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-size:13px;"></textarea>
+          <div style="display:flex;justify-content:flex-end;margin-top:10px;"><button class="btn" style="width:auto;" onclick="saveTemplate()">Save template</button></div>
+        </div>
 
         <div class="template-box">
           <h3 style="margin:0 0 4px;font-size:13px;color:var(--text-muted);">Account</h3>
@@ -323,7 +321,7 @@ let business = JSON.parse(localStorage.getItem('threadline_business') || 'null')
 let authMode = 'signup';
 let leadsCache = [];
 let selectedId = null;
-let settings = { replyTemplate:'', followupDays:3, staffList:[] };
+let settings = { replyTemplate:'', followupDays:3, staff_list:[] };
 
 const CHANNELS = {
   whatsapp:{label:'WhatsApp', color:'var(--whatsapp)', letter:'W'},
@@ -416,10 +414,10 @@ async function enterApp(){
   try {
     settings = await api('/api/me');
   } catch(e) {
-    settings = { replyTemplate: '', followupDays: 3, staffList: [] };
+    settings = { reply_template: '', followup_days: 3, staff_list: [] };
   }
-  if(!settings) settings = { replyTemplate: '', followupDays: 3, staffList: [] };
-  if(!settings.replyTemplate) settings.replyTemplate = '';
+  if(!settings) settings = { reply_template: '', followup_days: 3, staff_list: [] };
+  if(!settings.reply_template) settings.reply_template = '';
 
   await refreshAll();
   renderIntegrations();
@@ -446,14 +444,12 @@ async function renderDashboard(){
   document.getElementById('dashNewToday').textContent = d.newLeadsToday;
   document.getElementById('dashActiveConvo').textContent = d.activeConversations;
   document.getElementById('dashResponseTime').textContent = formatResponseTime(d.avgResponseMinutes);
-  document.getElementById('dashPeriod').textContent = d.followupDays + 'd';
+  document.getElementById('dashPeriod').textContent = (settings.followup_days || 3) + 'd';
   
-  // මෙහිදී අද දිනට හෝ overdue වූ අය පමණක් ফিল්ටර් කර ගනී
   const today = new Date().toDateString();
   const dueList = (d.dueForFollowup || []).filter(l => {
     if(!l.next_followup_at) return false;
     const dueDate = new Date(l.next_followup_at);
-    // අද දිනට හෝ ඊට පෙර (overdue) අය පමණක් තෝරා ගැනීම
     return dueDate <= new Date() || dueDate.toDateString() === today;
   });
 
@@ -482,6 +478,7 @@ async function renderDashboard(){
     </div>`;
   }).join('');
 }
+
 function goToLead(id){
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   document.getElementById('view-inbox').classList.add('active');
@@ -492,44 +489,48 @@ function goToLead(id){
 function renderSettingsPanels(){
   const preset = document.getElementById('followupPreset');
   const custom = document.getElementById('followupCustomDays');
-  if(settings.followupDays === 3 || settings.followupDays === 5){
-    preset.value = String(settings.followupDays);
+  const fDays = settings.followup_days || 3;
+  if(fDays === 3 || fDays === 5){
+    preset.value = String(fDays);
     custom.style.display = 'none';
   } else {
     preset.value = 'custom';
     custom.style.display = 'inline-block';
-    custom.value = settings.followupDays;
+    custom.value = fDays;
   }
   renderStaffChips();
+  document.getElementById('replyTemplate').value = settings.reply_template || '';
 }
+
 function onFollowupPresetChange(){
   document.getElementById('followupCustomDays').style.display = document.getElementById('followupPreset').value==='custom' ? 'inline-block' : 'none';
 }
+
 async function saveFollowupPeriod(){
   const preset = document.getElementById('followupPreset').value;
   const days = preset === 'custom' ? parseInt(document.getElementById('followupCustomDays').value,10) : parseInt(preset,10);
-  if(!Number.isInteger(days) || days < 1){ alert('Enter a whole number of days, at least 1.'); return; }
+  if(!Number.isInteger(days) || days < 1 || days > 6){ alert('Follow-up period එක දින 1 සහ 6 අතර අගයක් විය යුතුය!'); return; }
   settings = await api('/api/me', {method:'PATCH', body:{followupDays: days}});
   await refreshAll();
-  alert(`Follow-up period set to ${days} day(s). The Dashboard now uses this to flag leads.`);
+  alert(`Follow-up period set to ${days} day(s).`);
 }
+
 function renderStaffChips(){
   const el = document.getElementById('staffChips');
-  const staff = settings?.staffList || [];
+  const staff = settings?.staff_list || [];
   if(staff.length===0){ el.innerHTML = '<span style="color:var(--text-dim);font-size:12.5px;">No staff added yet.</span>'; return; }
   el.innerHTML = staff.map(name => `
     <span style="background:var(--panel-alt);border:1px solid var(--border);border-radius:20px;padding:5px 12px;font-size:12.5px;display:inline-flex;align-items:center;gap:8px;">
       ${name} <span style="cursor:pointer;color:var(--danger);" onclick="removeStaff('${name.replace(/'/g,"\\'")}')">✕</span>
     </span>`).join('');
 }
-// 1. Staff එකතු කිරීම සඳහා (Frontend)
+
 async function addStaff() {
   const input = document.getElementById('newStaffName');
   if (!input) return;
   const name = input.value.trim();
   if (!name) return;
 
-  // settings.staff_list යන්න ඔබේ Backend එකේ JSON.parse කර එන ලිස්ට් එකයි
   const staff = settings?.staff_list || [];
   if (staff.includes(name)) {
     input.value = '';
@@ -537,30 +538,48 @@ async function addStaff() {
   }
 
   const newList = [...staff, name];
-  
-  // Backend එක බලාපොරොත්තු වන්නේ 'staffList' ය
-  settings = await api('/api/me', {
-    method: 'PATCH',
-    body: { staffList: newList }
-  });
-  
-  input.value = '';
-  if (typeof renderStaffChips === 'function') renderStaffChips();
+  try {
+    settings = await api('/api/me', {
+      method: 'PATCH',
+      body: { staffList: newList }
+    });
+    input.value = '';
+    renderStaffChips();
+  } catch (err) {
+    console.error('Failed to add staff:', err);
+  }
 }
 
-// 2. Staff කෙනෙකු ඉවත් කිරීම සඳහා (Frontend)
 async function removeStaff(name) {
   const staff = settings?.staff_list || [];
   const newList = staff.filter(s => s !== name);
 
-  settings = await api('/api/me', {
-    method: 'PATCH',
-    body: { staffList: newList }
-  });
-
-  if (typeof renderStaffChips === 'function') renderStaffChips();
+  try {
+    settings = await api('/api/me', {
+      method: 'PATCH',
+      body: { staffList: newList }
+    });
+    renderStaffChips();
+  } catch (err) {
+    console.error('Failed to remove staff:', err);
+  }
 }
 
+async function saveTemplate() {
+  const textarea = document.getElementById('replyTemplate');
+  if (!textarea) return;
+  const templateText = textarea.value;
+
+  try {
+    settings = await api('/api/me', {
+      method: 'PATCH',
+      body: { replyTemplate: templateText }
+    });
+    alert('Automatic reply template saved successfully!');
+  } catch (err) {
+    console.error('Failed to save template:', err);
+  }
+}
 
 function renderInboxList(){
   const el = document.getElementById('inboxList');
@@ -597,7 +616,7 @@ function renderDetail(l){
   const panel = document.getElementById('detailPanel');
   const ch = CHANNELS[l.channel] || {label:l.channel, color:'#888', letter:'?'};
   const due = fmtDue(l.next_followup_at);
-  const staffList = settings?.staffList || [];
+  const staffList = settings?.staff_list || [];
   const historyList = l?.history || [];
 
   panel.innerHTML = `
@@ -641,7 +660,7 @@ function renderDetail(l){
           <h3>Quick actions</h3>
           <div class="quick-actions">
             <button class="btn-ghost" onclick="setReminder('${l.id}')">Snooze follow-up 1 hour</button>
-            <button class="btn-ghost" onclick="bumpFollowupClick('${l.id}')">Reset to ${settings.followupDays}-day follow-up</button>
+            <button class="btn-ghost" onclick="bumpFollowupClick('${l.id}')">Reset to ${settings.followup_days || 3}-day follow-up</button>
             <button class="btn-ghost" onclick="logCall('${l.id}')">Log a call</button>
           </div>
         </div>
@@ -663,7 +682,7 @@ async function assignStaff(id, val){
   await refreshAll(); selectLead(id);
 }
 async function bumpFollowupClick(id){
-  const days = Number(settings?.followupDays) || 3;
+  const days = Number(settings?.followup_days) || 3;
   const next = new Date(Date.now() + days * 24 * 3600 * 1000).toISOString();
   await api(`/api/leads/${id}`, {method:'PATCH', body:{nextFollowupAt: next}});
   await refreshAll(); selectLead(id);
@@ -766,31 +785,17 @@ function renderIntegrations(){
         ? `<button class="btn" style="width:auto;" onclick="startFacebookOAuth()">Continue with Facebook</button>`
         : `<button class="btn-ghost" onclick="connectChannel('${c.key}')">Connect</button>`}
     </div>`).join('');
-  document.getElementById('replyTemplate').value = settings.replyTemplate;
 }
+
 function startFacebookOAuth(){
   window.location.href = '/api/oauth/facebook/start?token=' + encodeURIComponent(token);
 }
+
 async function connectChannel(key){
   const val = document.getElementById('chan_'+key).value.trim();
   if(!val) return;
   await api('/api/channel-accounts', {method:'POST', body:{channel:key, accountId:val}});
   alert(key+' connected.');
-}
-async function saveTemplate() {
-  const textarea = document.getElementById('replyTemplate');
-  if (!textarea) return;
-  const templateText = textarea.value;
-
-  try {
-    settings = await api('/api/me', {
-      method: 'PATCH',
-      body: { autoReplyTemplate: templateText }
-    });
-    alert('Automatic reply template saved successfully!');
-  } catch (err) {
-    console.error('Failed to save template:', err);
-  }
 }
 
 function statusSlug(status){ return (status||'new').toLowerCase().replace(/\s+/g,'-'); }
@@ -807,7 +812,6 @@ function renderLeadsListView(){
       <div class="avatar" style="width:36px;height:36px;">${initials(l.name)}<div class="chan-badge" style="background:${ch.color}">${ch.letter}</div></div>
       <div class="lead-card-main">
         <div class="name">${l.name}</div>
-        <!-- මෙහි l.phone නිවැරදිව පෙන්වීමට සකසා ඇත -->
         <div class="meta mono">📱 ${l.phone||'—'} ${l.assigned_staff ? '· '+l.assigned_staff : ''} ${l.email ? '· '+l.email : ''}</div>
       </div>
       <span class="status-pill status-${statusSlug(l.status)}">${l.status}</span>
