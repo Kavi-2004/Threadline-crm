@@ -67,8 +67,8 @@ function startFacebookLogin(query) {
     `&scope=${encodeURIComponent(SCOPES)}`;
 
   return {
-    status:302,
-    redirect:loginUrl
+    status: 302,
+    redirect: loginUrl
   };
 
 }
@@ -82,15 +82,15 @@ async function handleFacebookCallback(query){
 
   if (!state || state.purpose !== 'oauth-facebook') {
     return {
-      status:400,
-      html:"Invalid OAuth state."
+      status: 400,
+      html: "Invalid OAuth state."
     };
   }
 
   if(query.error){
 
     return{
-      status:400,
+      status: 400,
       html:`Facebook Login Failed : ${query.error}`
     };
 
@@ -106,9 +106,7 @@ async function handleFacebookCallback(query){
     //---------------------------------------
 
     const tokenResponse = await fetch(
-
-`https://graph.facebook.com/v20.0/oauth/access_token?client_id=${APP_ID}&client_secret=${APP_SECRET}&redirect_uri=${encodeURIComponent(redirectUri)}&code=${query.code}`
-
+      `https://graph.facebook.com/v20.0/oauth/access_token?client_id=${APP_ID}&client_secret=${APP_SECRET}&redirect_uri=${encodeURIComponent(redirectUri)}&code=${query.code}`
     );
 
     const tokenData = await tokenResponse.json();
@@ -117,7 +115,7 @@ async function handleFacebookCallback(query){
 
       throw new Error(
         tokenData.error?.message ||
-        "Unable to retrieve access token."
+        "Unable to access token."
       );
 
     }
@@ -127,9 +125,7 @@ async function handleFacebookCallback(query){
     //---------------------------------------
 
     const pagesResponse = await fetch(
-
-`https://graph.facebook.com/v20.0/me/accounts?fields=id,name,access_token,instagram_business_account&access_token=${tokenData.access_token}`
-
+      `https://graph.facebook.com/v20.0/me/accounts?fields=id,name,access_token,instagram_business_account&access_token=${tokenData.access_token}`
     );
 
     const pagesJson = await pagesResponse.json();
@@ -143,46 +139,32 @@ async function handleFacebookCallback(query){
       //-----------------------------------
 
       await db.run(
-
-`INSERT INTO channel_accounts
-(id,business_id,channel,account_id)
-
-VALUES(?,?,?,?)
-
-ON CONFLICT(channel,account_id)
-
-DO UPDATE SET
-
-business_id=excluded.business_id`,
-
-[
-crypto.randomUUID(),
-state.businessId,
-'facebook',
-page.id
-]
-
-);
+        `INSERT INTO channel_accounts
+        (id,business_id,channel,account_id)
+        VALUES(?,?,?,?)
+        ON CONFLICT(channel,account_id)
+        DO UPDATE SET
+        business_id=excluded.business_id`,
+        [
+          crypto.randomUUID(),
+          state.businessId,
+          'facebook',
+          page.id
+        ]
+      );
 
       await db.run(
-
-`INSERT INTO channel_tokens
-(channel_account_key,access_token)
-
-VALUES(?,?)
-
-ON CONFLICT(channel_account_key)
-
-DO UPDATE SET
-
-access_token=excluded.access_token`,
-
-[
-`facebook:${page.id}`,
-page.access_token
-]
-
-);
+        `INSERT INTO channel_tokens
+        (channel_account_key,access_token)
+        VALUES(?,?)
+        ON CONFLICT(channel_account_key)
+        DO UPDATE SET
+        access_token=excluded.access_token`,
+        [
+          `facebook:${page.id}`,
+          page.access_token
+        ]
+      );
 
       //-----------------------------------
       // Save Instagram Business Account
@@ -190,86 +172,44 @@ page.access_token
 
       if(page.instagram_business_account){
 
-        const igId =
-        page.instagram_business_account.id;
+        const igId = page.instagram_business_account.id;
 
         await db.run(
-
-`INSERT INTO channel_accounts
-(id,business_id,channel,account_id)
-
-VALUES(?,?,?,?)
-
-ON CONFLICT(channel,account_id)
-
-DO UPDATE SET
-
-business_id=excluded.business_id`,
-
-[
-crypto.randomUUID(),
-state.businessId,
-'instagram',
-igId
-]
-
-);
+          `INSERT INTO channel_accounts
+          (id,business_id,channel,account_id)
+          VALUES(?,?,?,?)
+          ON CONFLICT(channel,account_id)
+          DO UPDATE SET
+          business_id=excluded.business_id`,
+          [
+            crypto.randomUUID(),
+            state.businessId,
+            'instagram',
+            igId
+          ]
+        );
 
         await db.run(
-
-`INSERT INTO channel_tokens
-(channel_account_key,access_token)
-
-VALUES(?,?)
-
-ON CONFLICT(channel_account_key)
-
-DO UPDATE SET
-
-access_token=excluded.access_token`,
-
-[
-`instagram:${igId}`,
-page.access_token
-]
-
-);
+          `INSERT INTO channel_tokens
+          (channel_account_key,access_token)
+          VALUES(?,?)
+          ON CONFLICT(channel_account_key)
+          DO UPDATE SET
+          access_token=excluded.access_token`,
+          [
+            `instagram:${igId}`,
+            page.access_token
+          ]
+        );
 
       }
 
     }
 
-    const instagramCount =
-      pages.filter(
-        p => p.instagram_business_account
-      ).length;
-
-    return{
-
-      status:200,
-
-      html:`
-<div style="font-family:sans-serif;padding:40px;">
-
-<h2>Successfully Connected</h2>
-
-<p>
-Facebook Pages :
-<b>${pages.length}</b>
-</p>
-
-<p>
-Instagram Accounts :
-<b>${instagramCount}</b>
-</p>
-
-<p>
-You may now close this window.
-</p>
-
-</div>
-`
-
+    // සාර්ථකව සම්බන්ධ වූ පසු ස්වයංක්‍රීයව CRM ඩෑෂ්බෝඩ් එක වෙත Redirect වීම
+    return {
+      status: 302,
+      redirect: '/index.html' // හෝ ඔබේ CRM ඩෑෂ්බෝඩ් ලින්ක් එක
     };
 
   }
@@ -277,21 +217,13 @@ You may now close this window.
   catch(err){
 
     return{
-
-      status:500,
-
-      html:`
-
-<div style="font-family:sans-serif;padding:40px;">
-
-<h2>Connection Failed</h2>
-
-<p>${err.message}</p>
-
-</div>
-
-`
-
+      status: 500,
+      html: `
+        <div style="font-family:sans-serif;padding:40px;">
+          <h2>Connection Failed</h2>
+          <p>${err.message}</p>
+        </div>
+      `
     };
 
   }
