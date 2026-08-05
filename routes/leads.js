@@ -152,7 +152,7 @@ async function bumpFollowup(businessId, leadId) {
 }
 
 async function getDashboard(businessId) {
-  const todayPrefix = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  const todayPrefix = new Date().toISOString().slice(0, 10);
   const newTodayRow = await db.get(
     `SELECT COUNT(*) AS n FROM leads WHERE business_id = ? AND captured_at LIKE ?`,
     [businessId, `${todayPrefix}%`]
