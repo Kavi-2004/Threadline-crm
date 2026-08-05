@@ -289,20 +289,22 @@
         </div>
 
         <div class="template-box">
-          <h3 style="margin:0 0 10px;font-size:13px;color:var(--text-muted);">Staff</h3>
-          <div style="color:var(--text-muted);font-size:12.5px;margin-bottom:12px;">Add staff names so leads can be assigned to someone for follow-up.</div>
-          <div id="staffChips" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;"></div>
-          <div style="display:flex;gap:8px;">
-            <input id="newStaffName" placeholder="Staff name" style="flex:1;background:var(--panel-alt);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-size:13px;">
-            <button class="btn" style="width:auto;" onclick="addStaff()">Add</button>
-          </div>
-        </div>
+  <h3 style="margin:0 0 10px;font-size:13px;color:var(--text-muted);">Staff</h3>
+  <div style="color:var(--text-muted);font-size:12.5px;margin-bottom:12px;">Add staff names so leads can be assigned to someone for follow-up.</div>
+  <div id="staffChips" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;"></div>
+  <div style="display:flex;gap:8px;">
+    <!-- මෙහි id="newStaffName" නිවැරදිව එකතු කර ඇත -->
+    <input id="newStaffName" placeholder="Staff name" style="flex:1;background:var(--panel-alt);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-size:13px;">
+    <button class="btn" style="width:auto;" onclick="addStaff()">Add</button>
+  </div>
+</div>
 
         <div class="template-box">
-          <h3 style="margin:0 0 10px;font-size:13px;color:var(--text-muted);">Automatic reply template</h3>
-          <textarea id="replyTemplate"></textarea>
-          <div style="display:flex;justify-content:flex-end;margin-top:10px;"><button class="btn" style="width:auto;" onclick="saveTemplate()">Save template</button></div>
-        </div>
+  <h3 style="margin:0 0 10px;font-size:13px;color:var(--text-muted);">Automatic reply template</h3>
+  <!-- මෙහි id="replyTemplate" නිවැරදිව එකතු කර ඇත -->
+  <textarea id="replyTemplate" style="width:100%;min-height:80px;background:var(--panel-alt);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-size:13px;"></textarea>
+  <div style="display:flex;justify-content:flex-end;margin-top:10px;"><button class="btn" style="width:auto;" onclick="saveTemplate()">Save template</button></div>
+</div>
 
         <div class="template-box">
           <h3 style="margin:0 0 4px;font-size:13px;color:var(--text-muted);">Account</h3>
@@ -445,13 +447,25 @@ async function renderDashboard(){
   document.getElementById('dashActiveConvo').textContent = d.activeConversations;
   document.getElementById('dashResponseTime').textContent = formatResponseTime(d.avgResponseMinutes);
   document.getElementById('dashPeriod').textContent = d.followupDays + 'd';
-  document.getElementById('dashDueCount').textContent = d.dueForFollowup.length;
+  
+  // මෙහිදී අද දිනට හෝ overdue වූ අය පමණක් ফিল්ටර් කර ගනී
+  const today = new Date().toDateString();
+  const dueList = (d.dueForFollowup || []).filter(l => {
+    if(!l.next_followup_at) return false;
+    const dueDate = new Date(l.next_followup_at);
+    // අද දිනට හෝ ඊට පෙර (overdue) අය පමණක් තෝරා ගැනීම
+    return dueDate <= new Date() || dueDate.toDateString() === today;
+  });
+
+  document.getElementById('dashDueCount').textContent = dueList.length;
   const listEl = document.getElementById('dashDueList');
-  if(d.dueForFollowup.length === 0){
-    listEl.innerHTML = '<div class="empty-hint">Nobody is due for a follow-up right now.</div>';
+  
+  if(dueList.length === 0){
+    listEl.innerHTML = '<div class="empty-hint">Nobody is due for a follow-up today.</div>';
     return;
   }
-  listEl.innerHTML = d.dueForFollowup.map(l=>{
+  
+  listEl.innerHTML = dueList.map(l=>{
     const ch = CHANNELS[l.channel] || {label:l.channel, color:'#888', letter:'?'};
     const due = fmtDue(l.next_followup_at);
     return `<div class="fu-row" onclick="goToLead('${l.id}')" style="cursor:pointer;">
@@ -461,7 +475,10 @@ async function renderDashboard(){
         <div class="action mono">${l.phone||'—'} · ${l.assigned_staff ? 'Assigned to '+l.assigned_staff : 'Unassigned'}</div>
       </div>
       <div class="fu-due" style="background:${due.cls==='overdue'?'var(--danger-dim)':'var(--amber-dim)'};color:${due.cls==='overdue'?'var(--danger)':'var(--amber)'}">${due.text}</div>
-      <div class="fu-actions"><button class="btn-ghost" onclick="event.stopPropagation();logCall('${l.id}')">Log call</button><button class="qbtn contacted-btn" onclick="event.stopPropagation();markContactedClick('${l.id}')">✓ Contacted</button></div>
+      <div class="fu-actions">
+        <button class="btn-ghost" onclick="event.stopPropagation();logCall('${l.id}')">Log call</button>
+        <button class="qbtn contacted-btn" onclick="event.stopPropagation();markContactedClick('${l.id}')">✓ Contacted</button>
+      </div>
     </div>`;
   }).join('');
 }
@@ -758,7 +775,8 @@ function renderLeadsListView(){
       <div class="avatar" style="width:36px;height:36px;">${initials(l.name)}<div class="chan-badge" style="background:${ch.color}">${ch.letter}</div></div>
       <div class="lead-card-main">
         <div class="name">${l.name}</div>
-        <div class="meta mono">${l.phone||'—'} ${l.assigned_staff ? '· '+l.assigned_staff : ''} ${l.email ? '· '+l.email : ''}</div>
+        <!-- මෙහි l.phone නිවැරදිව පෙන්වීමට සකසා ඇත -->
+        <div class="meta mono">📱 ${l.phone||'—'} ${l.assigned_staff ? '· '+l.assigned_staff : ''} ${l.email ? '· '+l.email : ''}</div>
       </div>
       <span class="status-pill status-${statusSlug(l.status)}">${l.status}</span>
       <span class="followup-progress">${count}/6 follow-ups</span>
