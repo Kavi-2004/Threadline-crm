@@ -112,13 +112,11 @@ const server = http.createServer(async (req, res) => {
       return send(res, r.status, r.json);
     }
 
-    // --- Facebook Webhook GET Verification (Aluthin Ekatukala) ---
     if (p === '/api/webhooks/facebook' && req.method === 'GET') {
       const r = webhooks.verifyFacebook(Object.fromEntries(url.searchParams));
       if (r.raw) { res.writeHead(r.status); return res.end(r.raw); }
       return send(res, r.status, r.json);
     }
-
     if (p === '/api/webhooks/facebook' && req.method === 'POST') {
       const r = await webhooks.handleFacebookLead(await readBody(req));
       return send(res, r.status, r.json);
@@ -137,7 +135,9 @@ const server = http.createServer(async (req, res) => {
     }
     if (p === '/api/oauth/facebook/callback' && req.method === 'GET') {
       const r = await oauth.handleFacebookCallback(Object.fromEntries(url.searchParams));
-      return sendHtml(res, r.status, r.html);
+      if (r.redirect) return sendRedirect(res, r.redirect);
+      if (r.html) return sendHtml(res, r.status, r.html);
+      return send(res, r.status, r.json);
     }
 
     // ---- Protected API Endpoints (Requires Login) ----
