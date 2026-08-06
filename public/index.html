@@ -279,8 +279,12 @@
           <div style="color:var(--text-muted);font-size:12.5px;margin-bottom:12px;">How many days after the last contact should a lead show up as "needs follow-up" on the Dashboard?</div>
           <div style="display:flex;gap:8px;align-items:center;">
             <select id="followupPreset" onchange="onFollowupPresetChange()" style="background:var(--panel-alt);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:13px;">
+              <option value="1">1 day</option>
+              <option value="2">2 days</option>
               <option value="3">3 days</option>
+              <option value="4">4 days</option>
               <option value="5">5 days</option>
+              <option value="6">6 days</option>
               <option value="custom">Custom</option>
             </select>
             <input id="followupCustomDays" type="number" min="1" style="display:none;width:90px;background:var(--panel-alt);border:1px solid var(--border);border-radius:8px;padding:7px 10px;color:var(--text);font-size:13px;" placeholder="days">
@@ -490,7 +494,10 @@ function renderSettingsPanels(){
   const preset = document.getElementById('followupPreset');
   const custom = document.getElementById('followupCustomDays');
   const fDays = settings.followup_days || 3;
-  if(fDays === 3 || fDays === 5){
+  
+  // Check if fDays is between 1 and 6, otherwise treat as custom
+  const validPresets = ['1', '2', '3', '4', '5', '6'];
+  if(validPresets.includes(String(fDays))){
     preset.value = String(fDays);
     custom.style.display = 'none';
   } else {
@@ -509,7 +516,7 @@ function onFollowupPresetChange(){
 async function saveFollowupPeriod(){
   const preset = document.getElementById('followupPreset').value;
   const days = preset === 'custom' ? parseInt(document.getElementById('followupCustomDays').value,10) : parseInt(preset,10);
-  if(!Number.isInteger(days) || days < 1 || days > 6){ alert('Follow-up period එක දින 1 සහ 6 අතර අගයක් විය යුතුය!'); return; }
+  if(!Number.isInteger(days) || days < 1){ alert('කරුණාකර වලංගු දින ගණනක් ඇතුළත් කරන්න (අවම වශයෙන් දින 1ක්වත් විය යුතුය)!'); return; }
   settings = await api('/api/me', {method:'PATCH', body:{followupDays: days}});
   await refreshAll();
   alert(`Follow-up period set to ${days} day(s).`);
