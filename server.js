@@ -111,6 +111,14 @@ const server = http.createServer(async (req, res) => {
       const r = await webhooks.handleWhatsApp(await readBody(req));
       return send(res, r.status, r.json);
     }
+
+    // --- Facebook Webhook GET Verification (Aluthin Ekatukala) ---
+    if (p === '/api/webhooks/facebook' && req.method === 'GET') {
+      const r = webhooks.verifyFacebook(Object.fromEntries(url.searchParams));
+      if (r.raw) { res.writeHead(r.status); return res.end(r.raw); }
+      return send(res, r.status, r.json);
+    }
+
     if (p === '/api/webhooks/facebook' && req.method === 'POST') {
       const r = await webhooks.handleFacebookLead(await readBody(req));
       return send(res, r.status, r.json);

@@ -53,8 +53,16 @@ async function sendAutoReply(businessId, lead, channel, realSendFn) {
   await addHistory(lead.id, 'autoreply', channel, 'Auto-reply sent', message);
 }
 
-// --- WhatsApp Webhook ---
+// --- WhatsApp Webhook Verification ---
 function verifyWhatsApp(query) {
+  if (query['hub.mode'] === 'subscribe' && query['hub.verify_token'] === VERIFY_TOKEN) {
+    return { status: 200, raw: query['hub.challenge'] };
+  }
+  return { status: 403, json: { error: 'Verification failed' } };
+}
+
+// --- Facebook / Messenger Webhook Verification ---
+function verifyFacebook(query) {
   if (query['hub.mode'] === 'subscribe' && query['hub.verify_token'] === VERIFY_TOKEN) {
     return { status: 200, raw: query['hub.challenge'] };
   }
@@ -129,6 +137,13 @@ async function connectChannelAccount(businessId, body) {
 }
 
 module.exports = {
-  verifyWhatsApp, handleWhatsApp, handleFacebookLead, handleInstagram, connectChannelAccount,
-  getOrCreateLead, sendAutoReply, findBusinessId,
+  verifyWhatsApp,
+  verifyFacebook,
+  handleWhatsApp,
+  handleFacebookLead,
+  handleInstagram,
+  connectChannelAccount,
+  getOrCreateLead,
+  sendAutoReply,
+  findBusinessId,
 };
