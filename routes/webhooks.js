@@ -106,6 +106,34 @@ async function handleFacebookLead(body) {
   }
 }
 
+// --- Facebook Messenger Messages Webhook ---
+async function handleFacebookMessenger(body) {
+  try {
+    const entry = body.entry?.[0];
+    const messaging = entry?.messaging?.[0];
+    const pageId = entry?.id;
+
+    if (!messaging || !messaging.message) {
+      return { status: 200, json: { ignored: true } };
+    }
+
+    const businessId = await findBusinessId('facebook', pageId);
+    if (!businessId) {
+      return { status: 200, json: { ignored: true, reason: 'Unmapped Facebook page' } };
+    }
+
+    const senderId = messaging.sender?.id;
+    const text = messaging.message?.text || '';
+
+    const lead = await getOrCreateLead(businessId, 'facebook', senderId, 'Facebook Contact', senderId, text);
+    await sendAutoReply(businessId, lead, 'facebook');
+
+    return { status: 200, json: { ok: true, leadId: lead.id } };
+  } catch (err) {
+    return { status: 500, json: { error: err.message } };
+  }
+}
+
 // --- Instagram Webhook ---
 async function handleInstagram(body) {
   try {
@@ -141,6 +169,7 @@ module.exports = {
   verifyFacebook,
   handleWhatsApp,
   handleFacebookLead,
+  handleFacebookMessenger,
   handleInstagram,
   connectChannelAccount,
   getOrCreateLead,

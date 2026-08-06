@@ -118,7 +118,13 @@ const server = http.createServer(async (req, res) => {
       return send(res, r.status, r.json);
     }
     if (p === '/api/webhooks/facebook' && req.method === 'POST') {
-      const r = await webhooks.handleFacebookLead(await readBody(req));
+      const body = await readBody(req);
+      let r;
+      if (body.entry?.[0]?.messaging) {
+        r = await webhooks.handleFacebookMessenger(body);
+      } else {
+        r = await webhooks.handleFacebookLead(body);
+      }
       return send(res, r.status, r.json);
     }
     if (p === '/api/webhooks/instagram' && req.method === 'POST') {
